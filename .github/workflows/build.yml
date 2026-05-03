@@ -1,0 +1,97 @@
+name: Build Plugins
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-plugins:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel
+
+      - name: Get tag name
+        id: get_tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG="latest"
+          fi
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+          echo "Detected tag: $TAG"
+
+      - name: Save tag info
+        run: echo "${{ steps.get_tag.outputs.TAG }}" > tag.txt
+
+      - name: Upload tag info
+        uses: actions/upload-artifact@v4
+        with:
+          name: tag-info
+          path: tag.txt
+          retention-days: 1
+
+      - name: Install Blender
+        run: |
+          wget https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz
+          tar -xf blender-4.2.0-linux-x64.tar.xz
+          mv blender-4.2.0-linux-x64 blender
+          
+      - name: Build Blender extensions
+        run: ./blender/blender --command extension build --output-dir .
+
+      - name: Rename plugins with version tag
+        run: |
+          echo "=== Original plugin files ==="
+          ls -la *.zip || echo "No zip files in root"
+
+          echo "=== Renaming plugins to include tag ${{ steps.get_tag.outputs.TAG }} ==="
+          for file in *.zip; do
+            if [[ -f "$file" ]]; then
+              base_name="${file%.*}"
+              new_name="${base_name}_${{ steps.get_tag.outputs.TAG }}.zip"
+              echo "Renaming: $file -> $new_name"
+              mv "$file" "$new_name"
+            fi
+          done
+
+      - name: List built extensions
+        run: |
+          echo "=== Built extensions ==="
+          ls -la *.zip || echo "No zip files in root"
+
+      - name: Upload plugin artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins
+          path: "*.zip"
+          retention-days: 1
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag_name }}
+          name: Release ${{ steps.get_tag.outputs.tag_name }}
+          files: "*.zip"
+          generate_release_notes: true

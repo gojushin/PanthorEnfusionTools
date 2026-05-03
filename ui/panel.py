@@ -1,0 +1,92 @@
+"""UI Panel for Panthor Enfusion Tools."""
+
+import bpy
+from bpy.types import Panel, UIList
+
+
+class PANTHOR_UL_lod_list(UIList):
+    """UIList for LODs."""
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        """Draw item in the list."""
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            row = layout.row(align=True)
+            row.label(text=item.obj.name, icon="OBJECT_DATAMODE")
+
+            if item.has_modifier:
+                row.prop(item, "ratio", text="")
+            else:
+                row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
+        elif self.layout_type == "GRID":
+            layout.alignment = "CENTER"
+            layout.label(text="", icon="OBJECT_DATAMODE")
+
+
+class PANTHOR_PT_main_panel(Panel):
+    """Main Panel for Panthor Enfusion Tools."""
+
+    bl_label = "Panthor Enfusion Tools"
+    bl_idname = "PANTHOR_PT_main_panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Panthor"
+
+    def draw(self, context):
+        """Draw the panel."""
+        layout = self.layout
+
+        # --- Import FBX ---
+        box = layout.box()
+        box.label(text="1. Import FBX", icon="IMPORT")
+        box.operator("panthor.import_fbx", text="Import FBX")
+
+        # --- Import Textures ---
+        box = layout.box()
+        box.label(text="2. Textures", icon="TEXTURE")
+        box.operator("panthor.import_textures", text="Import & Convert Textures")
+
+        # --- Colliders ---
+        box = layout.box()
+        box.label(text="3. Colliders", icon="MESH_CUBE")
+        row = box.row()
+        row.operator("panthor.fix_colliders", text="Fix Colliders", icon="AUTO")
+        row.operator("panthor.validate_colliders", text="Validate", icon="CHECKMARK")
+
+        box.label(text="Add Primitive:")
+        row = box.row(align=True)
+        row.operator("panthor.add_collider", text="Box").collider_type = "BOX"
+        row.operator("panthor.add_collider", text="Convex").collider_type = "CONVEX"
+        row.operator("panthor.add_collider", text="Sphere").collider_type = "SPHERE"
+        row = box.row(align=True)
+        row.operator("panthor.add_collider", text="Capsule").collider_type = "CAPSULE"
+        row.operator("panthor.add_collider", text="Cylinder").collider_type = "CYLINDER"
+
+        # --- LODs ---
+        box = layout.box()
+        box.label(text="4. LODs", icon="MOD_DECIM")
+
+        row = box.row()
+        row.template_list(
+            "PANTHOR_UL_lod_list", "", context.scene, "panthor_lods", context.scene, "panthor_lod_index", rows=3
+        )
+
+        col = row.column(align=True)
+        col.operator("panthor.add_lod", text="", icon="ADD")
+        col.operator("panthor.refresh_lods", text="", icon="FILE_REFRESH")
+
+        # --- Export ---
+        box = layout.box()
+        box.label(text="5. Export", icon="EXPORT")
+        box.operator("panthor.export_fbx", text="Export to Enfusion")
+
+
+def register():
+    """Register UI elements."""
+    bpy.utils.register_class(PANTHOR_UL_lod_list)
+    bpy.utils.register_class(PANTHOR_PT_main_panel)
+
+
+def unregister():
+    """Unregister UI elements."""
+    bpy.utils.unregister_class(PANTHOR_PT_main_panel)
+    bpy.utils.unregister_class(PANTHOR_UL_lod_list)

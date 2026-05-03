@@ -1,0 +1,16 @@
+schema_version = "1.0.0"
+
+id = "panthor_enfusion_tools"
+version = "0.1.0"
+name = "Panthor Enfusion Tools"
+tagline = "Toolbox for converting FBX and Textures to Enfusion engine standards"
+maintainer = "gojushin"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+license = [
+    "SPDX-License-Identifier: GPL-2.0-or-later"
+]
+permissions = ["files"]
+
+tags = ["Import-Export", "3D View"]
