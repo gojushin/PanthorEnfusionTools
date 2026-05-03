@@ -45,6 +45,23 @@ def rename_and_enumerate_colliders():
                 base_counts[key] += 1
                 obj.name = f"{key}_{base_counts[key]:02d}"
 
+
+def _get_bounding_box_info(obj):
+    """Return (center, dimensions) for *obj* in world space."""
+    import mathutils
+
+    corners = [obj.matrix_world @ mathutils.Vector(c) for c in obj.bound_box]
+    xs = [c.x for c in corners]
+    ys = [c.y for c in corners]
+    zs = [c.z for c in corners]
+
+    min_v = mathutils.Vector((min(xs), min(ys), min(zs)))
+    max_v = mathutils.Vector((max(xs), max(ys), max(zs)))
+    center = (min_v + max_v) / 2.0
+    dims = max_v - min_v
+    return center, dims
+
+
 class PANTHOR_OT_fix_colliders(Operator):
     """Rename Box colliders and enumerate all colliders."""
 
@@ -58,8 +75,9 @@ class PANTHOR_OT_fix_colliders(Operator):
         self.report({'INFO'}, "Colliders fixed.")
         return {'FINISHED'}
 
+
 class PANTHOR_OT_add_collider(Operator):
-    """Add a primitive collider to the active object."""
+    """Add a primitive collider fitted to the active object's bounding box."""
 
     bl_idname = "panthor.add_collider"
     bl_label = "Add Collider"
@@ -76,7 +94,7 @@ class PANTHOR_OT_add_collider(Operator):
     )
 
     def execute(self, context):
-        """Add primitive."""
+        """Add primitive collider fitted to the target mesh."""
         active = context.active_object
         if not active or active.type != 'MESH':
             self.report({'WARNING'}, "Please select a mesh object first.")
@@ -87,29 +105,66 @@ class PANTHOR_OT_add_collider(Operator):
         if "_LOD" in base_name:
             base_name = base_name.split("_LOD")[0]
 
+        # Get target bounding box
+        center, dims = _get_bounding_box_info(active)
+        dx, dy, dz = dims.x, dims.y, dims.z
+
+        # Create the primitive and fit it into the bounding box
         if self.collider_type == 'BOX':
             bpy.ops.mesh.primitive_cube_add()
             prefix = COLLIDER_PREFIX_BOX
+            new_obj = context.active_object
+            # Default cube is 2×2×2 — scale to half-dims
+            new_obj.scale = (dx / 2, dy / 2, dz / 2)
+            new_obj.location = center
+
         elif self.collider_type == 'CONVEX':
-            bpy.ops.mesh.primitive_cube_add() # Placeholder for convex
+            bpy.ops.mesh.primitive_cube_add()
             prefix = COLLIDER_PREFIX_CONVEX
+            new_obj = context.active_object
+            new_obj.scale = (dx / 2, dy / 2, dz / 2)
+            new_obj.location = center
+
         elif self.collider_type == 'SPHERE':
             bpy.ops.mesh.primitive_uv_sphere_add()
             prefix = COLLIDER_PREFIX_SPHERE
+            new_obj = context.active_object
+            # Default UV sphere radius = 1 — uniform scale to fit the largest axis
+            radius = max(dx, dy, dz) / 2
+            new_obj.scale = (radius, radius, radius)
+            new_obj.location = center
+
         elif self.collider_type == 'CAPSULE':
-            bpy.ops.mesh.primitive_cylinder_add() # Capsule is tricky without extra steps, using cylinder
+            bpy.ops.mesh.primitive_cylinder_add()
             prefix = COLLIDER_PREFIX_CAPSULE
+            new_obj = context.active_object
+            # Default cylinder: radius 1, depth 2 — scale Z only to match height
+            z_scale = dz / 2
+            uniform_r = max(dx, dy) / 2
+            new_obj.scale = (uniform_r, uniform_r, z_scale)
+            new_obj.location = center
+
         elif self.collider_type == 'CYLINDER':
             bpy.ops.mesh.primitive_cylinder_add()
             prefix = COLLIDER_PREFIX_CYLINDER
+            new_obj = context.active_object
+            z_scale = dz / 2
+            uniform_r = max(dx, dy) / 2
+            new_obj.scale = (uniform_r, uniform_r, z_scale)
+            new_obj.location = center
 
-        new_obj = context.active_object
         new_obj.name = f"{prefix}{base_name}"
+
+        # Apply rotation and scale, then set origin to geometry
+        bpy.context.view_layer.objects.active = new_obj
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
         # Enumerate to ensure correct suffix
         rename_and_enumerate_colliders()
 
         return {'FINISHED'}
+
 
 class PANTHOR_OT_validate_colliders(Operator):
     """Check colliders for errors."""
@@ -147,11 +202,13 @@ class PANTHOR_OT_validate_colliders(Operator):
 
         return {'FINISHED'}
 
+
 def register():
     """Register collider operators."""
     bpy.utils.register_class(PANTHOR_OT_fix_colliders)
     bpy.utils.register_class(PANTHOR_OT_add_collider)
     bpy.utils.register_class(PANTHOR_OT_validate_colliders)
+
 
 def unregister():
     """Unregister collider operators."""

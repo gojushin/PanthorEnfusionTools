@@ -1,4 +1,4 @@
-"""Export operators."""
+"""FBX Export Operators."""
 
 import os
 
@@ -16,10 +16,10 @@ from ..utils.constants import (
 
 
 class PANTHOR_OT_export_fbx(Operator):
-    """Export FBX and Textures for Enfusion."""
+    """Export scene as FBX with textures for Enfusion."""
 
     bl_idname = "panthor.export_fbx"
-    bl_label = "Export to Enfusion"
+    bl_label = "Export FBX for Enfusion"
     bl_options = {"REGISTER"}
 
     directory: StringProperty(subtype="DIR_PATH")
@@ -30,7 +30,7 @@ class PANTHOR_OT_export_fbx(Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        """Execute export."""
+        """Execute FBX export."""
         if not self.directory:
             return {"CANCELLED"}
 
@@ -83,7 +83,7 @@ class PANTHOR_OT_export_fbx(Operator):
                 img.file_format = "PNG"
                 img.save()
 
-        self.report({"INFO"}, f"Exported to {self.directory}")
+        self.report({"INFO"}, f"FBX exported to {self.directory}")
         return {"FINISHED"}
 
 

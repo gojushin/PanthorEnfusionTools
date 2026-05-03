@@ -40,6 +40,10 @@ class PANTHOR_PT_main_panel(Panel):
         box.label(text="1. Import FBX", icon="IMPORT")
         box.operator("panthor.import_fbx", text="Import FBX")
 
+        # Collection name field (only shown after an import)
+        if context.scene.panthor_import_collection_name:
+            box.prop(context.scene, "panthor_import_collection_name", text="Collection")
+
         # --- Import Textures ---
         box = layout.box()
         box.label(text="2. Textures", icon="TEXTURE")
@@ -72,12 +76,17 @@ class PANTHOR_PT_main_panel(Panel):
 
         col = row.column(align=True)
         col.operator("panthor.add_lod", text="", icon="ADD")
+        col.operator("panthor.remove_lod", text="", icon="REMOVE")
+        col.separator()
         col.operator("panthor.refresh_lods", text="", icon="FILE_REFRESH")
+
+        # Hide LODs toggle
+        box.prop(context.scene, "panthor_hide_lods", text="Hide LODs", icon="HIDE_ON")
 
         # --- Export ---
         box = layout.box()
-        box.label(text="5. Export", icon="EXPORT")
-        box.operator("panthor.export_fbx", text="Export to Enfusion")
+        box.label(text="5. Export FBX", icon="EXPORT")
+        box.operator("panthor.export_fbx", text="Export FBX for Enfusion")
 
 
 def register():

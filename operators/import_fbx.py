@@ -13,8 +13,40 @@ from ..utils.constants import (
 )
 
 
+def _update_collection_name(self, _context):
+    """Rename collection and all contained objects when the name changes.
+
+    For each object, the existing suffix/prefix relative to the old base
+    name is preserved and the new base name is substituted in.
+    """
+    scene = bpy.context.scene
+    col = bpy.data.collections.get(scene.get("panthor_import_col_real", ""))
+    if not col:
+        return
+
+    new_base = scene.panthor_import_collection_name
+    old_name = col.name
+
+    # Derive old base name (the collection name *is* the old base name)
+    old_base = old_name
+
+    # Rename objects inside the collection
+    for obj in list(col.objects):
+        if obj.name == old_base or obj.name.startswith(f"{old_base}_"):
+            suffix = obj.name[len(old_base):]
+            obj.name = f"{new_base}{suffix}"
+
+            # Rename mesh data-block to match
+            if obj.data:
+                obj.data.name = obj.name
+
+    # Rename the collection itself
+    col.name = new_base
+    scene["panthor_import_col_real"] = col.name
+
+
 class PANTHOR_OT_import_fbx(Operator):
-    """Import an FBX and process it for Enfusion."""
+    """Import an FBX file and organise it into a collection for Enfusion."""
 
     bl_idname = "panthor.import_fbx"
     bl_label = "Import FBX"
@@ -38,7 +70,9 @@ class PANTHOR_OT_import_fbx(Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        """Execute the import."""
+        """Execute the FBX import."""
+        import os
+
         # Import FBX
         bpy.ops.import_scene.fbx(filepath=self.filepath)
 
@@ -48,8 +82,9 @@ class PANTHOR_OT_import_fbx(Operator):
         )
 
         objects_to_delete = []
+        imported_objects = list(context.selected_objects)
 
-        for obj in context.selected_objects:
+        for obj in imported_objects:
             name_lower = obj.name.lower()
 
             is_lod = "lod" in name_lower
@@ -78,13 +113,42 @@ class PANTHOR_OT_import_fbx(Operator):
             for obj in objects_to_delete:
                 obj.select_set(True)
             bpy.ops.object.delete()
+            # Refresh the surviving list
+            imported_objects = [o for o in imported_objects if o not in objects_to_delete]
 
+        # --- Organise into a collection ---
+        # Derive a base name from the filename
+        base_name = os.path.splitext(os.path.basename(self.filepath))[0]
+
+        col = bpy.data.collections.new(base_name)
+        context.scene.collection.children.link(col)
+
+        for obj in imported_objects:
+            # Unlink from any existing collections, then link to ours
+            for old_col in list(obj.users_collection):
+                old_col.objects.unlink(obj)
+            col.objects.link(obj)
+
+        # Store reference so the rename callback can find the collection
+        context.scene["panthor_import_col_real"] = col.name
+        context.scene.panthor_import_collection_name = base_name
+
+        self.report({'INFO'}, f"Imported FBX into collection '{base_name}'")
         return {'FINISHED'}
+
 
 def register():
     """Register the import FBX operator."""
     bpy.utils.register_class(PANTHOR_OT_import_fbx)
+    bpy.types.Scene.panthor_import_collection_name = StringProperty(
+        name="Collection Name",
+        description="Rename the import collection and all its objects",
+        default="",
+        update=_update_collection_name,
+    )
+
 
 def unregister():
     """Unregister the import FBX operator."""
     bpy.utils.unregister_class(PANTHOR_OT_import_fbx)
+    del bpy.types.Scene.panthor_import_collection_name
