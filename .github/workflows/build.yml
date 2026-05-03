@@ -41,16 +41,6 @@ jobs:
           echo "tag_name=$TAG" >> $GITHUB_OUTPUT
           echo "Detected tag: $TAG"
 
-      - name: Save tag info
-        run: echo "${{ steps.get_tag.outputs.TAG }}" > tag.txt
-
-      - name: Upload tag info
-        uses: actions/upload-artifact@v4
-        with:
-          name: tag-info
-          path: tag.txt
-          retention-days: 1
-
       - name: Install Blender
         run: |
           wget https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz
@@ -88,7 +78,7 @@ jobs:
           retention-days: 1
 
       - name: Create GitHub Release
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_tag.outputs.tag_name }}
