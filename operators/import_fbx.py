@@ -85,9 +85,16 @@ class PANTHOR_OT_import_fbx(Operator):
         imported_objects = list(context.selected_objects)
 
         for obj in imported_objects:
-            name_lower = obj.name.lower()
+            name = obj.name
+            name_lower = name.lower()
 
-            is_lod = "lod" in name_lower
+            # Detect LOD prefix: LOD{n}_Name
+            is_lod = (
+                name_lower.startswith("lod")
+                and len(name_lower) > 3
+                and name_lower[3].isdigit()
+                and "_" in name_lower[3:]
+            )
             is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
 
             if is_lod and not self.keep_lods:

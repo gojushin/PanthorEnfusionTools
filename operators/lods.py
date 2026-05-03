@@ -4,41 +4,38 @@ import bpy
 from bpy.props import CollectionProperty, FloatProperty, PointerProperty
 from bpy.types import Operator, PropertyGroup
 
+# LOD prefix format: "LOD{n}_"
+_LOD_PREFIX = "LOD"
+
 
 def get_base_name(obj):
-    """Get the base name without LOD suffix."""
+    """Get the base name without LOD prefix (e.g. 'LOD0_MyMesh' → 'MyMesh')."""
     name = obj.name
-    if "_LOD" in name:
-        return name.split("_LOD")[0]
+    if name.startswith(_LOD_PREFIX) and "_" in name[len(_LOD_PREFIX):]:
+        # Strip leading digits after "LOD" and the underscore separator
+        rest = name[len(_LOD_PREFIX):]  # e.g. "0_MyMesh"
+        num_str, _, base = rest.partition("_")
+        if num_str.isdigit():
+            return base
     return name
 
 
 def get_lod_objects(base_name):
-    """Return all LOD objects for a base name, sorted by LOD number."""
+    """Return all LOD objects for a base name, sorted by LOD number.
+
+    Naming convention: ``LOD{n}_{base_name}``
+    """
     lods = []
     for obj in bpy.context.scene.objects:
-        if obj.name.startswith(f"{base_name}_LOD"):
-            suffix = obj.name[len(base_name) + 4:]  # strip '{base_name}_LOD'
-            if suffix.isdigit():
-                lods.append((int(suffix), obj))
+        name = obj.name
+        if not name.startswith(_LOD_PREFIX):
+            continue
+        rest = name[len(_LOD_PREFIX):]  # e.g. "0_MyMesh"
+        num_str, _, obj_base = rest.partition("_")
+        if num_str.isdigit() and obj_base == base_name:
+            lods.append((int(num_str), obj))
     lods.sort(key=lambda x: x[0])
     return lods
-
-
-def _get_bounding_box_dims(obj):
-    """Return (center, dimensions) of an object's world-space bounding box."""
-    import mathutils
-
-    bbox_corners = [obj.matrix_world @ mathutils.Vector(c) for c in obj.bound_box]
-    xs = [c.x for c in bbox_corners]
-    ys = [c.y for c in bbox_corners]
-    zs = [c.z for c in bbox_corners]
-
-    min_co = mathutils.Vector((min(xs), min(ys), min(zs)))
-    max_co = mathutils.Vector((max(xs), max(ys), max(zs)))
-    center = (min_co + max_co) / 2
-    dims = max_co - min_co
-    return center, dims
 
 
 def _refresh_lod_list(context):
@@ -50,17 +47,17 @@ def _refresh_lod_list(context):
 
     base_name = get_base_name(active)
 
-    # Prefer the _LOD0 object as the base; fall back to a plain-named or active object
-    lod0_obj = bpy.data.objects.get(f"{base_name}_LOD0")
+    # LOD0 is the base / highest-quality mesh
+    lod0_obj = bpy.data.objects.get(f"LOD0_{base_name}")
     base_obj = lod0_obj or bpy.data.objects.get(base_name) or active
     base_verts = len(base_obj.data.vertices)
 
     context.scene.panthor_lods.clear()
 
-    # Collect all LODs in order (LOD0 first, then LOD1, LOD2 ...)
+    # Collect all LODs in numeric order
     ordered_lods = get_lod_objects(base_name)
 
-    # If the plain-named base exists and has no _LOD0 counterpart, show it first
+    # If the plain-named base exists and has no LOD0 counterpart, show it first
     if not lod0_obj and bpy.data.objects.get(base_name):
         plain_obj = bpy.data.objects[base_name]
         item = context.scene.panthor_lods.add()
@@ -102,10 +99,10 @@ class PANTHOR_OT_add_lod(Operator):
 
         base_name = get_base_name(active)
 
-        # Ensure the base object is named as LOD0
-        base_obj = bpy.data.objects.get(base_name)
-        if base_obj and not base_obj.name.endswith("_LOD0"):
-            base_obj.name = f"{base_name}_LOD0"
+        # Ensure the base object is named as LOD0_{base_name}
+        plain_obj = bpy.data.objects.get(base_name)
+        if plain_obj and not plain_obj.name.startswith("LOD0_"):
+            plain_obj.name = f"LOD0_{base_name}"
 
         # Find highest existing LOD number
         existing_lods = get_lod_objects(base_name)
@@ -114,7 +111,7 @@ class PANTHOR_OT_add_lod(Operator):
         # Duplicate active object
         bpy.ops.object.duplicate(linked=False)
         new_obj = context.active_object
-        new_obj.name = f"{base_name}_LOD{next_lod_num}"
+        new_obj.name = f"LOD{next_lod_num}_{base_name}"
 
         # Add decimate modifier with progressive reduction
         mod = new_obj.modifiers.new(name="Decimate", type='DECIMATE')
@@ -203,7 +200,7 @@ class PANTHOR_OT_refresh_lods(Operator):
 
 
 def _update_hide_lods(self, _context):
-    """Toggle visibility of all LOD objects (except LOD0) when the checkbox changes."""
+    """Toggle visibility of LOD1+ objects when the checkbox changes."""
     scene = bpy.context.scene
     hide = scene.panthor_hide_lods
 
@@ -211,12 +208,17 @@ def _update_hide_lods(self, _context):
         obj = item.obj
         if not obj:
             continue
-        # Never hide LOD0 / base mesh (first entry)
-        if obj.name.endswith("_LOD0"):
+        # Never hide LOD0 / base mesh
+        if obj.name.startswith("LOD0_"):
             continue
-        if "_LOD" in obj.name:
-            obj.hide_viewport = hide
-            obj.hide_render = hide
+        # Hide any object that carries a LOD prefix
+        name = obj.name
+        if name.startswith(_LOD_PREFIX):
+            rest = name[len(_LOD_PREFIX):]
+            num_str = rest.partition("_")[0]
+            if num_str.isdigit():
+                obj.hide_viewport = hide
+                obj.hide_render = hide
 
 
 # ---------------------------------------------------------------------------

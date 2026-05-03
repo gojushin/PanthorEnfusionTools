@@ -64,10 +64,16 @@ class PANTHOR_OT_export_fbx(Operator):
                     for mod in obj.modifiers:
                         bpy.ops.object.modifier_apply(modifier=mod.name)
 
-        # Export FBX
+        # Export FBX — derive base name by stripping any LODx_ prefix
         base_name = "ExportedModel"
         if context.active_object:
-            base_name = context.active_object.name.split("_LOD")[0]
+            raw = context.active_object.name
+            # New convention: LODx_BaseName
+            if raw.startswith("LOD") and "_" in raw[3:]:
+                num_str, _, rest = raw[3:].partition("_")
+                base_name = rest if num_str.isdigit() else raw
+            else:
+                base_name = raw
 
         fbx_path = os.path.join(self.directory, f"{base_name}.fbx")
         bpy.ops.export_scene.fbx(

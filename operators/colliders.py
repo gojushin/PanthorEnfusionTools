@@ -101,9 +101,11 @@ class PANTHOR_OT_add_collider(Operator):
             return {'CANCELLED'}
 
         base_name = active.name
-        # Remove LOD suffix if present
-        if "_LOD" in base_name:
-            base_name = base_name.split("_LOD")[0]
+        # Strip LODx_ prefix if present (e.g. "LOD0_MyMesh" → "MyMesh")
+        if base_name.startswith("LOD") and "_" in base_name[3:]:
+            num_str, _, rest = base_name[3:].partition("_")
+            if num_str.isdigit():
+                base_name = rest
 
         # Get target bounding box
         center, dims = _get_bounding_box_info(active)
