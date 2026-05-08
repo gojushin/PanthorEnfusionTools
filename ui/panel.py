@@ -11,12 +11,17 @@ class PANTHOR_UL_lod_list(UIList):
         """Draw item in the list."""
         if self.layout_type in {"DEFAULT", "COMPACT"}:
             row = layout.row(align=True)
-            row.label(text=item.obj.name, icon="OBJECT_DATAMODE")
+            if item.obj:
+                row.label(text=item.obj.name, icon="OBJECT_DATAMODE")
 
-            if item.has_modifier:
-                row.prop(item, "ratio", text="")
+                if item.has_modifier:
+                    row.prop(item, "ratio", text="")
+                else:
+                    row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
+                    
+                row.prop(item.obj, "hide_viewport", text="", emboss=False)
             else:
-                row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
+                row.label(text="<Missing>", icon="ERROR")
         elif self.layout_type == "GRID":
             layout.alignment = "CENTER"
             layout.label(text="", icon="OBJECT_DATAMODE")
@@ -30,7 +35,18 @@ class PANTHOR_UL_collider_list(UIList):
         if self.layout_type in {"DEFAULT", "COMPACT"}:
             row = layout.row(align=True)
             if item.obj:
-                row.label(text=item.obj.name, icon="MESH_CUBE")
+                name = item.obj.name
+                c_icon = "MESH_CUBE"
+                if name.startswith("UCX_"):
+                    c_icon = "MESH_ICOSPHERE"
+                elif name.startswith("USP_"):
+                    c_icon = "MESH_UVSPHERE"
+                elif name.startswith("UCS_"):
+                    c_icon = "MESH_CAPSULE"
+                elif name.startswith("UCL_"):
+                    c_icon = "MESH_CYLINDER"
+                    
+                row.label(text=name, icon=c_icon)
             else:
                 row.label(text="<Missing>", icon="ERROR")
         elif self.layout_type == "GRID":
@@ -85,12 +101,12 @@ class PANTHOR_PT_main_panel(Panel):
 
         box.label(text="Add Primitive:")
         row = box.row(align=True)
-        row.operator("panthor.add_collider", text="Box").collider_type = "BOX"
-        row.operator("panthor.add_collider", text="Convex").collider_type = "CONVEX"
-        row.operator("panthor.add_collider", text="Sphere").collider_type = "SPHERE"
+        row.operator("panthor.add_collider", text="Box", icon="MESH_CUBE").collider_type = "BOX"
+        row.operator("panthor.add_collider", text="Convex", icon="MESH_ICOSPHERE").collider_type = "CONVEX"
+        row.operator("panthor.add_collider", text="Sphere", icon="MESH_UVSPHERE").collider_type = "SPHERE"
         row = box.row(align=True)
-        row.operator("panthor.add_collider", text="Capsule").collider_type = "CAPSULE"
-        row.operator("panthor.add_collider", text="Cylinder").collider_type = "CYLINDER"
+        row.operator("panthor.add_collider", text="Capsule", icon="MESH_CAPSULE").collider_type = "CAPSULE"
+        row.operator("panthor.add_collider", text="Cylinder", icon="MESH_CYLINDER").collider_type = "CYLINDER"
 
         # --- LODs ---
         box = layout.box()

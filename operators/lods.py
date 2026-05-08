@@ -84,31 +84,40 @@ def _refresh_lod_list(context):
 # ---------------------------------------------------------------------------
 
 class PANTHOR_OT_add_lod(Operator):
-    """Add a new LOD to the active object."""
+    """Add a new LOD using LOD0 as the base."""
 
     bl_idname = "panthor.add_lod"
     bl_label = "Add LOD"
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context):
+        """Check if we can add a LOD."""
+        if not context.scene.panthor_lods or not context.scene.panthor_lods[0].obj:
+            cls.poll_message_set("A base mesh or LOD0 must be present in the LOD list.")
+            return False
+        return True
+
     def execute(self, context):
         """Execute add LOD."""
-        active = context.active_object
-        if not active or active.type != 'MESH':
-            self.report({'WARNING'}, "Select a mesh object.")
-            return {'CANCELLED'}
-
-        base_name = get_base_name(active)
+        scene = context.scene
+        lod0_obj = scene.panthor_lods[0].obj
+        
+        base_name = get_base_name(lod0_obj)
 
         # Ensure the base object is named as LOD0_{base_name}
-        plain_obj = bpy.data.objects.get(base_name)
-        if plain_obj and not plain_obj.name.startswith("LOD0_"):
-            plain_obj.name = f"LOD0_{base_name}"
+        if not lod0_obj.name.startswith("LOD0_"):
+            lod0_obj.name = f"LOD0_{base_name}"
 
         # Find highest existing LOD number
         existing_lods = get_lod_objects(base_name)
         next_lod_num = (existing_lods[-1][0] + 1) if existing_lods else 1
 
-        # Duplicate active object
+        # Safely duplicate LOD0 without relying on previous selection state
+        bpy.ops.object.select_all(action='DESELECT')
+        lod0_obj.select_set(True)
+        context.view_layer.objects.active = lod0_obj
+        
         bpy.ops.object.duplicate(linked=False)
         new_obj = context.active_object
         new_obj.name = f"LOD{next_lod_num}_{base_name}"
