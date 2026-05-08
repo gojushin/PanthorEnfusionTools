@@ -149,18 +149,25 @@ class PANTHOR_OT_remove_lod(Operator):
             self.report({"WARNING"}, "No LOD selected.")
             return {"CANCELLED"}
 
+        # Prevent deleting LOD0 / base mesh
+        if idx == 0:
+            self.report({"WARNING"}, "Cannot delete the base mesh (LOD0).")
+            return {"CANCELLED"}
+
         item = scene.panthor_lods[idx]
         obj = item.obj
+        
+        lod0_obj = scene.panthor_lods[0].obj
 
         if not obj:
             self.report({"WARNING"}, "LOD object no longer exists.")
             scene.panthor_lods.remove(idx)
             return {"CANCELLED"}
 
-        # Prevent deleting LOD0 / base mesh
-        if idx == 0:
-            self.report({"WARNING"}, "Cannot delete the base mesh (LOD0).")
-            return {"CANCELLED"}
+        # Fallback the active object to LOD0 to prevent Blender from losing context
+        if context.view_layer.objects.active == obj:
+            context.view_layer.objects.active = lod0_obj
+            lod0_obj.select_set(True)
 
         # Delete the Blender object
         bpy.data.objects.remove(obj, do_unlink=True)

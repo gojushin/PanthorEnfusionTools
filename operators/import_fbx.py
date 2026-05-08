@@ -187,6 +187,10 @@ class PANTHOR_OT_import_fbx(Operator):
 
         bpy.ops.panthor.refresh_lods()
         bpy.ops.panthor.refresh_colliders()
+        
+        # Refresh textures to immediately display any embedded textures
+        if hasattr(bpy.ops.panthor, "refresh_textures"):
+            bpy.ops.panthor.refresh_textures()
 
         self.report({"INFO"}, f"Imported FBX into collection '{base_name}'")
         return {"FINISHED"}
