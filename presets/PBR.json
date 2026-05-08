@@ -1,0 +1,35 @@
+{
+    "name": "PBR (Roughness/Metallic)",
+    "maps": [
+        {
+            "name": "BCR",
+            "mapping": {
+                "R": ["BASECOLOR.R"],
+                "G": ["BASECOLOR.G"],
+                "B": ["BASECOLOR.B"],
+                "A": ["ROUGHNESS.R", "ROUGHNESS.G", "ROUGHNESS.B"]
+            },
+            "actions": {
+                "invert_red_channel": false,
+                "invert_green_channel": false,
+                "invert_blue_channel": false,
+                "invert_alpha_channel": false
+            }
+        },
+        {
+            "name": "NMO",
+            "mapping": {
+                "R": ["NORMAL.R"],
+                "G": ["NORMAL.G"],
+                "B": ["METALNESS.R", "METALNESS.G", "METALNESS.B"],
+                "A": ["OPACITY.R", "BASECOLOR.A", "OPACITY.G"]
+            },
+            "actions": {
+                "invert_red_channel": false,
+                "invert_green_channel": false,
+                "invert_blue_channel": false,
+                "invert_alpha_channel": false
+            }
+        }
+    ]
+}

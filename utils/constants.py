@@ -7,12 +7,15 @@ COLLIDER_PREFIX_SPHERE = "USP_"
 COLLIDER_PREFIX_CAPSULE = "UCS_"
 COLLIDER_PREFIX_CYLINDER = "UCL_"
 
-# Input Texture Suffixes
-TEXTURE_SUFFIXES_BASECOLOR = ("basecolor", "bc", "bca", "albedo")
-TEXTURE_SUFFIXES_NORMAL = ("n", "norm", "normal")
-TEXTURE_SUFFIXES_ORM = ("orm", "occlusionroughnessmetallic")
-TEXTURE_SUFFIXES_ROUGHNESS = ("rough", "roughness", "r")
-TEXTURE_SUFFIXES_METALNESS = ("metalness", "m", "metallic")
+TEXTURE_SUFFIXES = {
+    "BASECOLOR": ("basecolor", "bc", "bca", "albedo"),
+    "NORMAL": ("n", "norm", "normal"),
+    "ORM": ("orm", "occlusionroughnessmetallic"),
+    "ROUGHNESS": ("rough", "roughness", "r"),
+    "METALNESS": ("metalness", "m", "metallic"),
+    "OPACITY": ("opacity", "alpha", "a"),
+    "MASK": ("mask", "maskmap"),
+}
 
 # Output Texture Prefixes and Suffixes
 TEXTURE_PREFIX_ENFUSION = "PTR_"

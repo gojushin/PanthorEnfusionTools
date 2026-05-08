@@ -1,0 +1,35 @@
+{
+    "name": "Unity (HDRP)",
+    "maps": [
+        {
+            "name": "BCR",
+            "mapping": {
+                "R": ["BASECOLOR.R"],
+                "G": ["BASECOLOR.G"],
+                "B": ["BASECOLOR.B"],
+                "A": ["MASK.A", "ROUGHNESS.R"]
+            },
+            "actions": {
+                "invert_red_channel": false,
+                "invert_green_channel": false,
+                "invert_blue_channel": false,
+                "invert_alpha_channel": true
+            }
+        },
+        {
+            "name": "NMO",
+            "mapping": {
+                "R": ["NORMAL.R"],
+                "G": ["NORMAL.G"],
+                "B": ["MASK.R", "METALNESS.R"],
+                "A": ["MASK.G", "OPACITY.R", "BASECOLOR.A"]
+            },
+            "actions": {
+                "invert_red_channel": false,
+                "invert_green_channel": true,
+                "invert_blue_channel": false,
+                "invert_alpha_channel": false
+            }
+        }
+    ]
+}

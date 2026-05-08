@@ -5,14 +5,9 @@ import bpy
 from bpy.props import CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Operator, PropertyGroup
 
-from ..utils.constants import (
-    TEXTURE_SUFFIXES_BASECOLOR,
-    TEXTURE_SUFFIXES_METALNESS,
-    TEXTURE_SUFFIXES_NORMAL,
-    TEXTURE_SUFFIXES_ORM,
-    TEXTURE_SUFFIXES_ROUGHNESS,
-)
-from ..utils.texture_processing import create_bcr_texture, create_nmo_texture
+from ..utils.constants import TEXTURE_SUFFIXES
+from ..utils.texture_presets import TEXTURE_PRESETS
+from ..utils.texture_processing import generate_texture
 
 
 class PanthorTextureItem(PropertyGroup):
@@ -44,20 +39,29 @@ def _get_image_by_suffix(images_list, material_name, suffixes):
     return None
 
 
-def process_material_textures(material, images_list, preset):
-    """Generate BCR and NMO textures and set up the material."""
-    bc_img = _get_image_by_suffix(images_list, material.name, TEXTURE_SUFFIXES_BASECOLOR)
-    n_img = _get_image_by_suffix(images_list, material.name, TEXTURE_SUFFIXES_NORMAL)
-    
-    r_img, m_img, orm_img = None, None, None
-    if preset == 'UNREAL':
-        orm_img = _get_image_by_suffix(images_list, material.name, TEXTURE_SUFFIXES_ORM)
-    elif preset == 'PBR':
-        r_img = _get_image_by_suffix(images_list, material.name, TEXTURE_SUFFIXES_ROUGHNESS)
-        m_img = _get_image_by_suffix(images_list, material.name, TEXTURE_SUFFIXES_METALNESS)
+def process_material_textures(material, images_list, preset_key):
+    """Generate textures based on preset and set up the material."""
+    preset = TEXTURE_PRESETS.get(preset_key)
+    if not preset:
+        return
         
-    bcr = create_bcr_texture(f"PTR_{material.name}_BCR", bc_img=bc_img, r_img=r_img if preset=='PBR' else None)
-    nmo = create_nmo_texture(f"PTR_{material.name}_NMO", n_img=n_img, orm_img=orm_img, m_img=m_img)
+    # Collect available images for this material
+    available_images = {}
+    for tex_type, suffixes in TEXTURE_SUFFIXES.items():
+        available_images[tex_type] = _get_image_by_suffix(images_list, material.name, suffixes)
+        
+    generated_textures = {}
+    for map_config in preset["maps"]:
+        tex_name = f"PTR_{material.name}_{map_config['name']}"
+        
+        # Determine fallback color based on typical use
+        if map_config['name'] == 'NMO':
+            fallback = (0.5, 0.5, 0.0, 1.0)
+        else:
+            fallback = (1.0, 1.0, 1.0, 1.0)
+            
+        img = generate_texture(tex_name, map_config, available_images, fallback_color=fallback)
+        generated_textures[map_config['name']] = img
     
     # Set up material nodes
     material.use_nodes = True
@@ -71,21 +75,23 @@ def process_material_textures(material, images_list, preset):
     out.location = (300, 0)
     links.new(bsdf.outputs[0], out.inputs[0])
     
-    tex_bcr = nodes.new("ShaderNodeTexImage")
-    tex_bcr.image = bcr
-    tex_bcr.location = (-300, 100)
-    links.new(tex_bcr.outputs[0], bsdf.inputs["Base Color"])
-    
-    tex_nmo = nodes.new("ShaderNodeTexImage")
-    tex_nmo.image = nmo
-    tex_nmo.location = (-300, -200)
-    if tex_nmo.image:
-        tex_nmo.image.colorspace_settings.name = 'Non-Color'
-    
-    normal_map = nodes.new("ShaderNodeNormalMap")
-    normal_map.location = (-100, -200)
-    links.new(tex_nmo.outputs[0], normal_map.inputs["Color"])
-    links.new(normal_map.outputs[0], bsdf.inputs["Normal"])
+    if "BCR" in generated_textures:
+        tex_bcr = nodes.new("ShaderNodeTexImage")
+        tex_bcr.image = generated_textures["BCR"]
+        tex_bcr.location = (-300, 100)
+        links.new(tex_bcr.outputs[0], bsdf.inputs["Base Color"])
+        
+    if "NMO" in generated_textures:
+        tex_nmo = nodes.new("ShaderNodeTexImage")
+        tex_nmo.image = generated_textures["NMO"]
+        tex_nmo.location = (-300, -200)
+        if tex_nmo.image:
+            tex_nmo.image.colorspace_settings.name = 'Non-Color'
+        
+        normal_map = nodes.new("ShaderNodeNormalMap")
+        normal_map.location = (-100, -200)
+        links.new(tex_nmo.outputs[0], normal_map.inputs["Color"])
+        links.new(normal_map.outputs[0], bsdf.inputs["Normal"])
 
 
 class PANTHOR_OT_remap_embedded_textures(Operator):
@@ -170,6 +176,8 @@ class PANTHOR_OT_refresh_textures(Operator):
 
 def register():
     """Register texture operators."""
+    from ..utils.texture_presets import get_preset_items
+    
     bpy.utils.register_class(PanthorTextureItem)
     bpy.utils.register_class(PANTHOR_OT_remap_embedded_textures)
     bpy.utils.register_class(PANTHOR_OT_import_textures)
@@ -180,12 +188,7 @@ def register():
     
     bpy.types.Scene.panthor_texture_preset = EnumProperty(
         name="Texture Preset",
-        items=[
-            ('NONE', "None", "Do not remap"),
-            ('UNREAL', "Unreal (ORM)", "Use Occlusion/Roughness/Metallic maps"),
-            ('PBR', "PBR (Roughness/Metallic)", "Use separate Roughness and Metallic maps"),
-        ],
-        default='NONE'
+        items=get_preset_items,
     )
 
 

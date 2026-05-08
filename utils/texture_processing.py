@@ -23,103 +23,95 @@ def _set_image_pixels(image: bpy.types.Image, pixels_array: np.ndarray):
     image.pixels.foreach_set(pixels)
     image.update()
 
-def create_bcr_texture(
+def generate_texture(
     name: str,
-    bc_img: bpy.types.Image = None,
-    r_img: bpy.types.Image = None,
+    config: dict,
+    available_images: dict,
     width: int = 1024,
     height: int = 1024,
-    fallback_color: tuple = (1.0, 1.0, 1.0, 1.0),
+    fallback_color: tuple = (1.0, 1.0, 1.0, 1.0)
 ) -> bpy.types.Image:
-    """Create a BaseColor + Roughness (BCR) texture.
+    """Generate a texture based on a dynamic config mapping."""
+    
+    # 1. Determine maximum resolution among used images
+    used_types = set()
+    for map_key in ["R", "G", "B", "A"]:
+        for mapping in config["mapping"].get(map_key, []):
+            tex_type = mapping.split(".")[0]
+            used_types.add(tex_type)
+            
+    for tex_type in used_types:
+        img = available_images.get(tex_type)
+        if img:
+            width = max(width, img.size[0])
+            height = max(height, img.size[1])
 
-    RGB = Base Color, Alpha = Roughness.
-    """
-    if bc_img:
-        width, height = bc_img.size
-    elif r_img:
-        width, height = r_img.size
+    # 2. Initialize pixels with fallback color
+    pixels = np.empty((height, width, 4), dtype=np.float32)
+    pixels[:, :, 0] = fallback_color[0]
+    pixels[:, :, 1] = fallback_color[1]
+    pixels[:, :, 2] = fallback_color[2]
+    pixels[:, :, 3] = fallback_color[3]
+    
+    # 3. Load pixel arrays for needed images
+    pixel_arrays = {}
+    for tex_type in used_types:
+        img = available_images.get(tex_type)
+        if img:
+            pixel_arrays[tex_type] = _get_image_pixels(img)
+            
+    channel_indices = {"R": 0, "G": 1, "B": 2, "A": 3}
+    
+    # 4. Apply mappings
+    for dest_ch_str, sources in config["mapping"].items():
+        if dest_ch_str not in channel_indices: 
+            continue
+        dest_ch_idx = channel_indices[dest_ch_str]
+        
+        # Sources is a list (e.g. ["BASECOLOR.R", "ROUGHNESS.G"])
+        for source in sources:
+            parts = source.split(".")
+            if len(parts) != 2:
+                continue
+                
+            tex_type, src_ch_str = parts
+            if tex_type in pixel_arrays:
+                src_pixels = pixel_arrays[tex_type]
+                src_ch_idx = channel_indices.get(src_ch_str, 0)
+                
+                if src_ch_idx < src_pixels.shape[2]:
+                    # If the source image is lower resolution, we should ideally resize it.
+                    # For performance and simplicity, we currently assume textures are same resolution
+                    # if they are actively being mapped, or we just map what fits.
+                    
+                    h_src, w_src, _ = src_pixels.shape
+                    
+                    if h_src == height and w_src == width:
+                        pixels[:, :, dest_ch_idx] = src_pixels[:, :, src_ch_idx]
+                    else:
+                        import cv2
+                        # Faster resizing with OpenCV if available, else simple slice (which tiles/crops)
+                        # We will use simple slice/crop for now to avoid cv2 dependency.
+                        # It's better to ensure users supply matching resolutions.
+                        h_min = min(height, h_src)
+                        w_min = min(width, w_src)
+                        # Tile/crop logic:
+                        pixels[:h_min, :w_min, dest_ch_idx] = src_pixels[:h_min, :w_min, src_ch_idx]
+                        
+                    break # Success! Do not try fallbacks for this channel
 
-    bcr_img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
-
-    pixels = np.ones((height, width, 4), dtype=np.float32)
-
-    if bc_img:
-        bc_pixels = _get_image_pixels(bc_img)
-        # Handle cases where base color might not have alpha
-        if bc_pixels.shape[2] == 4:
-            pixels[:, :, :3] = bc_pixels[:, :, :3]
-        elif bc_pixels.shape[2] == 3:
-            pixels[:, :, :3] = bc_pixels
-    else:
-        pixels[:, :, 0] = fallback_color[0]
-        pixels[:, :, 1] = fallback_color[1]
-        pixels[:, :, 2] = fallback_color[2]
-
-    if r_img:
-        r_pixels = _get_image_pixels(r_img)
-        # Roughness is usually single channel or we take the first channel
-        if r_pixels.shape[2] >= 1:
-            pixels[:, :, 3] = r_pixels[:, :, 0]
-    else:
-        pixels[:, :, 3] = fallback_color[3]
-
-    _set_image_pixels(bcr_img, pixels)
-    bcr_img.pack()
-    return bcr_img
-
-def create_nmo_texture(
-    name: str,
-    n_img: bpy.types.Image = None,
-    orm_img: bpy.types.Image = None,
-    r_img: bpy.types.Image = None,
-    m_img: bpy.types.Image = None,
-    ao_img: bpy.types.Image = None,
-    width: int = 1024,
-    height: int = 1024,
-) -> bpy.types.Image:
-    """Create a Normal + Metallic + Ambient Occlusion (NMO) texture.
-
-    RG = Normal, B = Metallic, A = Ambient Occlusion.
-    """
-    if n_img:
-        width, height = n_img.size
-    elif orm_img:
-        width, height = orm_img.size
-    elif r_img:
-        width, height = r_img.size
-    elif m_img:
-        width, height = m_img.size
-
-    nmo_img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
-    # Default: Flat Normal (0.5, 0.5, 1.0), Black Metallic, White AO
-    pixels = np.ones((height, width, 4), dtype=np.float32)
-    pixels[:, :, 0] = 0.5  # Normal R
-    pixels[:, :, 1] = 0.5  # Normal G
-    pixels[:, :, 2] = 0.0  # Metallic
-    pixels[:, :, 3] = 1.0  # AO
-
-    if n_img:
-        n_pixels = _get_image_pixels(n_img)
-        if n_pixels.shape[2] >= 2:
-            pixels[:, :, :2] = n_pixels[:, :, :2]
-
-    if orm_img:
-        orm_pixels = _get_image_pixels(orm_img)
-        if orm_pixels.shape[2] >= 3:
-            # ORM: R = AO, G = Roughness, B = Metallic
-            pixels[:, :, 2] = orm_pixels[:, :, 2] # Metallic -> B
-            pixels[:, :, 3] = orm_pixels[:, :, 0] # AO -> A
-    else:
-        if m_img:
-            m_pixels = _get_image_pixels(m_img)
-            if m_pixels.shape[2] >= 1:
-                pixels[:, :, 2] = m_pixels[:, :, 0] # Metallic -> B
-        if ao_img:
-            ao_pixels = _get_image_pixels(ao_img)
-            if ao_pixels.shape[2] >= 1:
-                pixels[:, :, 3] = ao_pixels[:, :, 0] # AO -> A
-
-    _set_image_pixels(nmo_img, pixels)
-    nmo_img.pack()
-    return nmo_img
+    # 5. Apply actions (Inversions)
+    actions = config.get("actions", {})
+    if actions.get("invert_red_channel"):
+        pixels[:, :, 0] = 1.0 - pixels[:, :, 0]
+    if actions.get("invert_green_channel"):
+        pixels[:, :, 1] = 1.0 - pixels[:, :, 1]
+    if actions.get("invert_blue_channel"):
+        pixels[:, :, 2] = 1.0 - pixels[:, :, 2]
+    if actions.get("invert_alpha_channel"):
+        pixels[:, :, 3] = 1.0 - pixels[:, :, 3]
+        
+    img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
+    _set_image_pixels(img, pixels)
+    img.pack()
+    return img
