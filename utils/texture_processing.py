@@ -73,6 +73,8 @@ def create_nmo_texture(
     n_img: bpy.types.Image = None,
     orm_img: bpy.types.Image = None,
     r_img: bpy.types.Image = None,
+    m_img: bpy.types.Image = None,
+    ao_img: bpy.types.Image = None,
     width: int = 1024,
     height: int = 1024,
 ) -> bpy.types.Image:
@@ -86,6 +88,8 @@ def create_nmo_texture(
         width, height = orm_img.size
     elif r_img:
         width, height = r_img.size
+    elif m_img:
+        width, height = m_img.size
 
     nmo_img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
     # Default: Flat Normal (0.5, 0.5, 1.0), Black Metallic, White AO
@@ -106,10 +110,15 @@ def create_nmo_texture(
             # ORM: R = AO, G = Roughness, B = Metallic
             pixels[:, :, 2] = orm_pixels[:, :, 2] # Metallic -> B
             pixels[:, :, 3] = orm_pixels[:, :, 0] # AO -> A
-    elif r_img:
-        # User defined: If only roughness, R=white, G=roughness, B=white
-        # Then metallic=0.0 (default), AO=1.0 (default)
-        pass
+    else:
+        if m_img:
+            m_pixels = _get_image_pixels(m_img)
+            if m_pixels.shape[2] >= 1:
+                pixels[:, :, 2] = m_pixels[:, :, 0] # Metallic -> B
+        if ao_img:
+            ao_pixels = _get_image_pixels(ao_img)
+            if ao_pixels.shape[2] >= 1:
+                pixels[:, :, 3] = ao_pixels[:, :, 0] # AO -> A
 
     _set_image_pixels(nmo_img, pixels)
     nmo_img.pack()

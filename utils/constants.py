@@ -12,6 +12,7 @@ TEXTURE_SUFFIXES_BASECOLOR = ("basecolor", "bc", "bca", "albedo")
 TEXTURE_SUFFIXES_NORMAL = ("n", "norm", "normal")
 TEXTURE_SUFFIXES_ORM = ("orm", "occlusionroughnessmetallic")
 TEXTURE_SUFFIXES_ROUGHNESS = ("rough", "roughness", "r")
+TEXTURE_SUFFIXES_METALNESS = ("metalness", "m", "metallic")
 
 # Output Texture Prefixes and Suffixes
 TEXTURE_PREFIX_ENFUSION = "PTR_"
