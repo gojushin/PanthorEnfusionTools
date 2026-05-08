@@ -122,8 +122,27 @@ class PANTHOR_OT_import_fbx(Operator):
             imported_objects = [o for o in imported_objects if o not in objects_to_delete]
 
         # --- Organise into a collection ---
-        # Derive a base name from the filename
-        base_name = os.path.splitext(os.path.basename(self.filepath))[0]
+        # Derive a base name from the imported objects
+        base_name = None
+        
+        # 1. Look for LOD0
+        for obj in imported_objects:
+            if obj.name.upper().startswith("LOD0_"):
+                base_name = obj.name[5:]
+                break
+                
+        # 2. Fallback to first non-collider mesh
+        if not base_name:
+            for obj in imported_objects:
+                if obj.type == 'MESH':
+                    is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
+                    if not is_collider:
+                        base_name = obj.name
+                        break
+                        
+        # 3. Absolute fallback
+        if not base_name:
+            base_name = os.path.splitext(os.path.basename(self.filepath))[0]
 
         col = bpy.data.collections.new(base_name)
         context.scene.collection.children.link(col)
