@@ -2,8 +2,8 @@
 
 import os
 import bpy
-from bpy.props import EnumProperty, StringProperty
-from bpy.types import Operator
+from bpy.props import CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
+from bpy.types import Operator, PropertyGroup
 
 from ..utils.constants import (
     TEXTURE_SUFFIXES_BASECOLOR,
@@ -13,6 +13,21 @@ from ..utils.constants import (
     TEXTURE_SUFFIXES_ROUGHNESS,
 )
 from ..utils.texture_processing import create_bcr_texture, create_nmo_texture
+
+
+class PanthorTextureItem(PropertyGroup):
+    """Property group for a texture item."""
+    
+    img: PointerProperty(type=bpy.types.Image)
+
+
+def _refresh_texture_list(context):
+    """Refresh the list of generated PTR_ textures."""
+    context.scene.panthor_textures.clear()
+    for img in bpy.data.images:
+        if img.name.startswith("PTR_"):
+            item = context.scene.panthor_textures.add()
+            item.img = img
 
 
 def _get_image_by_suffix(images_list, material_name, suffixes):
@@ -94,6 +109,7 @@ class PANTHOR_OT_remap_embedded_textures(Operator):
                     if slot.material:
                         process_material_textures(slot.material, images, preset)
                         
+        _refresh_texture_list(context)
         self.report({'INFO'}, "Embedded textures remapped.")
         return {'FINISHED'}
 
@@ -135,14 +151,33 @@ class PANTHOR_OT_import_textures(Operator):
                     if slot.material:
                         process_material_textures(slot.material, loaded_images, preset)
                         
+        _refresh_texture_list(context)
         self.report({'INFO'}, "Textures imported and remapped.")
         return {"FINISHED"}
 
 
+class PANTHOR_OT_refresh_textures(Operator):
+    """Refresh the list of imported textures."""
+    bl_idname = "panthor.refresh_textures"
+    bl_label = "Refresh Textures"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        """Execute refresh."""
+        _refresh_texture_list(context)
+        return {'FINISHED'}
+
+
 def register():
     """Register texture operators."""
+    bpy.utils.register_class(PanthorTextureItem)
     bpy.utils.register_class(PANTHOR_OT_remap_embedded_textures)
     bpy.utils.register_class(PANTHOR_OT_import_textures)
+    bpy.utils.register_class(PANTHOR_OT_refresh_textures)
+    
+    bpy.types.Scene.panthor_textures = CollectionProperty(type=PanthorTextureItem)
+    bpy.types.Scene.panthor_texture_index = IntProperty()
+    
     bpy.types.Scene.panthor_texture_preset = EnumProperty(
         name="Texture Preset",
         items=[
@@ -157,5 +192,10 @@ def register():
 def unregister():
     """Unregister texture operators."""
     del bpy.types.Scene.panthor_texture_preset
+    del bpy.types.Scene.panthor_texture_index
+    del bpy.types.Scene.panthor_textures
+    
+    bpy.utils.unregister_class(PANTHOR_OT_refresh_textures)
     bpy.utils.unregister_class(PANTHOR_OT_import_textures)
     bpy.utils.unregister_class(PANTHOR_OT_remap_embedded_textures)
+    bpy.utils.unregister_class(PanthorTextureItem)

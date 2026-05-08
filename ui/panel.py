@@ -27,6 +27,22 @@ class PANTHOR_UL_lod_list(UIList):
             layout.label(text="", icon="OBJECT_DATAMODE")
 
 
+class PANTHOR_UL_texture_list(UIList):
+    """UIList for Textures."""
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        """Draw item in the list."""
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            row = layout.row(align=True)
+            if item.img:
+                row.label(text=item.img.name, icon="IMAGE_DATA")
+            else:
+                row.label(text="<Missing>", icon="ERROR")
+        elif self.layout_type == "GRID":
+            layout.alignment = "CENTER"
+            layout.label(text="", icon="IMAGE_DATA")
+
+
 class PANTHOR_UL_collider_list(UIList):
     """UIList for Colliders."""
 
@@ -90,6 +106,13 @@ class PANTHOR_PT_main_panel(Panel):
             row.operator("panthor.remap_embedded_textures", text="Remap Embedded Textures")
         else:
             row.operator("panthor.import_textures", text="Import & Remap Textures")
+            
+        row = box.row()
+        row.template_list(
+            "PANTHOR_UL_texture_list", "", context.scene, "panthor_textures", context.scene, "panthor_texture_index", rows=3
+        )
+        col = row.column(align=True)
+        col.operator("panthor.refresh_textures", text="", icon="FILE_REFRESH")
 
         # --- Colliders ---
         box = layout.box()
@@ -156,6 +179,7 @@ class PANTHOR_PT_main_panel(Panel):
 def register():
     """Register UI elements."""
     bpy.utils.register_class(PANTHOR_UL_lod_list)
+    bpy.utils.register_class(PANTHOR_UL_texture_list)
     bpy.utils.register_class(PANTHOR_UL_collider_list)
     bpy.utils.register_class(PANTHOR_PT_main_panel)
 
@@ -164,4 +188,5 @@ def unregister():
     """Unregister UI elements."""
     bpy.utils.unregister_class(PANTHOR_PT_main_panel)
     bpy.utils.unregister_class(PANTHOR_UL_collider_list)
+    bpy.utils.unregister_class(PANTHOR_UL_texture_list)
     bpy.utils.unregister_class(PANTHOR_UL_lod_list)
