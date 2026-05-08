@@ -1,7 +1,7 @@
 """UI Panel for Panthor Enfusion Tools."""
 
 import bpy
-from bpy.types import AddonPreferences, Panel, UIList
+from bpy.types import Panel, UIList
 
 
 class PANTHOR_UL_lod_list(UIList):
@@ -127,27 +127,8 @@ class PANTHOR_PT_main_panel(Panel):
             row.operator("panthor.export_fbx_ebt", text="Export using EBT")
 
 
-class PanthorAddonPreferences(AddonPreferences):
-    """Preferences for Panthor Enfusion Tools."""
-    
-    bl_idname = __package__.split(".")[0] if __package__ else "PanthorEnfusionTools"
-
-    def draw(self, context):
-        """Draw preferences panel."""
-        layout = self.layout
-        layout.label(text="Uninstall Panthor Enfusion Tools:")
-        
-        if hasattr(bpy.ops, 'extensions') and hasattr(bpy.ops.extensions, 'package_uninstall'):
-            op = layout.operator("extensions.package_uninstall", text="Uninstall Extension", icon="TRASH")
-            op.pkg_id = "panthor_enfusion_tools"
-        else:
-            op = layout.operator("preferences.addon_remove", text="Uninstall Addon", icon="TRASH")
-            op.module = self.bl_idname
-
-
 def register():
     """Register UI elements."""
-    bpy.utils.register_class(PanthorAddonPreferences)
     bpy.utils.register_class(PANTHOR_UL_lod_list)
     bpy.utils.register_class(PANTHOR_UL_collider_list)
     bpy.utils.register_class(PANTHOR_PT_main_panel)
@@ -158,4 +139,3 @@ def unregister():
     bpy.utils.unregister_class(PANTHOR_PT_main_panel)
     bpy.utils.unregister_class(PANTHOR_UL_collider_list)
     bpy.utils.unregister_class(PANTHOR_UL_lod_list)
-    bpy.utils.unregister_class(PanthorAddonPreferences)

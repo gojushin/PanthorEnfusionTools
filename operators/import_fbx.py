@@ -139,8 +139,14 @@ class PANTHOR_OT_import_fbx(Operator):
         context.scene.panthor_import_collection_name = base_name
 
         # Make base mesh active so refresh_lods works, then refresh UI lists
+        base_mesh = None
+        fallback_mesh = None
+
         for obj in imported_objects:
             if obj.type == 'MESH':
+                if fallback_mesh is None:
+                    fallback_mesh = obj
+                
                 name_lower = obj.name.lower()
                 is_lod = (
                     name_lower.startswith("lod")
@@ -150,8 +156,13 @@ class PANTHOR_OT_import_fbx(Operator):
                 )
                 is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
                 if not is_lod and not is_collider:
-                    bpy.context.view_layer.objects.active = obj
+                    base_mesh = obj
                     break
+        
+        if base_mesh:
+            bpy.context.view_layer.objects.active = base_mesh
+        elif fallback_mesh:
+            bpy.context.view_layer.objects.active = fallback_mesh
 
         bpy.ops.panthor.refresh_lods()
         bpy.ops.panthor.refresh_colliders()
