@@ -20,7 +20,7 @@ class PanthorAddonPreferences(AddonPreferences):
         layout.label(text="Uninstall Panthor Enfusion Tools:")
         
         op = layout.operator("preferences.addon_remove", text="Uninstall Addon", icon="TRASH")
-        op.module = self.bl_idname
+        op.module = __package__
 
 
 def register():
