@@ -18,10 +18,11 @@ class PanthorTextureItem(PropertyGroup):
 
 
 def _refresh_texture_list(context):
-    """Refresh the list of generated PTR_ textures."""
+    """Refresh the list of relevant textures (embedded and generated)."""
     context.scene.panthor_textures.clear()
     for img in bpy.data.images:
-        if img.name.startswith("PTR_"):
+        # Ignore rendering results and viewer nodes to only show actual texture data
+        if img.has_data and img.type != 'RENDER_RESULT' and img.name != 'Render Result':
             item = context.scene.panthor_textures.add()
             item.img = img
 
