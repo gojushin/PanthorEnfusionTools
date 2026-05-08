@@ -7,6 +7,7 @@ def register():
     """Register UI classes."""
     panel.register()
 
+
 def unregister():
     """Unregister UI classes."""
     panel.unregister()

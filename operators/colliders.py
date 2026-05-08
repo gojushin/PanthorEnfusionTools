@@ -20,7 +20,7 @@ def rename_and_enumerate_colliders():
     prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
 
     for obj in bpy.context.scene.objects:
-        if obj.type == 'MESH' and any(obj.name.startswith(p) for p in prefixes):
+        if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
             colliders.append(obj)
 
     # Dictionary to keep track of counts per base name
@@ -32,7 +32,7 @@ def rename_and_enumerate_colliders():
             obj.name = obj.name.replace("UCX_", "UBX_", 1)
 
         # Parse base name
-        parts = obj.name.split('_')
+        parts = obj.name.split("_")
         if len(parts) >= 2:
             prefix = parts[0] + "_"
             base_name = parts[1]
@@ -68,13 +68,13 @@ class PANTHOR_OT_fix_colliders(Operator):
 
     bl_idname = "panthor.fix_colliders"
     bl_label = "Fix Colliders"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute fix colliders."""
         rename_and_enumerate_colliders()
-        self.report({'INFO'}, "Colliders fixed.")
-        return {'FINISHED'}
+        self.report({"INFO"}, "Colliders fixed.")
+        return {"FINISHED"}
 
 
 class PANTHOR_OT_add_collider(Operator):
@@ -82,24 +82,24 @@ class PANTHOR_OT_add_collider(Operator):
 
     bl_idname = "panthor.add_collider"
     bl_label = "Add Collider"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {"REGISTER", "UNDO"}
 
     collider_type: bpy.props.EnumProperty(
         items=[
-            ('BOX', "Box", ""),
-            ('CONVEX', "Convex", ""),
-            ('SPHERE', "Sphere", ""),
-            ('CAPSULE', "Capsule", ""),
-            ('CYLINDER', "Cylinder", ""),
+            ("BOX", "Box", ""),
+            ("CONVEX", "Convex", ""),
+            ("SPHERE", "Sphere", ""),
+            ("CAPSULE", "Capsule", ""),
+            ("CYLINDER", "Cylinder", ""),
         ]
     )
 
     def execute(self, context):
         """Add primitive collider fitted to the target mesh."""
         active = context.active_object
-        if not active or active.type != 'MESH':
-            self.report({'WARNING'}, "Please select a mesh object first.")
-            return {'CANCELLED'}
+        if not active or active.type != "MESH":
+            self.report({"WARNING"}, "Please select a mesh object first.")
+            return {"CANCELLED"}
 
         base_name = context.scene.panthor_import_collection_name
         if not base_name:
@@ -115,7 +115,7 @@ class PANTHOR_OT_add_collider(Operator):
         dx, dy, dz = dims.x, dims.y, dims.z
 
         # Create the primitive and fit it into the bounding box
-        if self.collider_type == 'BOX':
+        if self.collider_type == "BOX":
             bpy.ops.mesh.primitive_cube_add()
             prefix = COLLIDER_PREFIX_BOX
             new_obj = context.active_object
@@ -123,14 +123,14 @@ class PANTHOR_OT_add_collider(Operator):
             new_obj.scale = (dx / 2, dy / 2, dz / 2)
             new_obj.location = center
 
-        elif self.collider_type == 'CONVEX':
+        elif self.collider_type == "CONVEX":
             bpy.ops.mesh.primitive_cube_add()
             prefix = COLLIDER_PREFIX_CONVEX
             new_obj = context.active_object
             new_obj.scale = (dx / 2, dy / 2, dz / 2)
             new_obj.location = center
 
-        elif self.collider_type == 'SPHERE':
+        elif self.collider_type == "SPHERE":
             bpy.ops.mesh.primitive_uv_sphere_add()
             prefix = COLLIDER_PREFIX_SPHERE
             new_obj = context.active_object
@@ -139,7 +139,7 @@ class PANTHOR_OT_add_collider(Operator):
             new_obj.scale = (radius, radius, radius)
             new_obj.location = center
 
-        elif self.collider_type == 'CAPSULE':
+        elif self.collider_type == "CAPSULE":
             bpy.ops.mesh.primitive_cylinder_add()
             prefix = COLLIDER_PREFIX_CAPSULE
             new_obj = context.active_object
@@ -149,7 +149,7 @@ class PANTHOR_OT_add_collider(Operator):
             new_obj.scale = (uniform_r, uniform_r, z_scale)
             new_obj.location = center
 
-        elif self.collider_type == 'CYLINDER':
+        elif self.collider_type == "CYLINDER":
             bpy.ops.mesh.primitive_cylinder_add()
             prefix = COLLIDER_PREFIX_CYLINDER
             new_obj = context.active_object
@@ -178,7 +178,7 @@ class PANTHOR_OT_add_collider(Operator):
         # Refresh UI list
         _refresh_collider_list(context)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class PANTHOR_OT_validate_colliders(Operator):
@@ -186,7 +186,7 @@ class PANTHOR_OT_validate_colliders(Operator):
 
     bl_idname = "panthor.validate_colliders"
     bl_label = "Validate Colliders"
-    bl_options = {'REGISTER'}
+    bl_options = {"REGISTER"}
 
     def execute(self, context):
         """Validate all colliders."""
@@ -194,7 +194,7 @@ class PANTHOR_OT_validate_colliders(Operator):
         errors = []
 
         for obj in bpy.context.scene.objects:
-            if obj.type == 'MESH' and any(obj.name.startswith(p) for p in prefixes):
+            if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
                 # Check origin
                 if tuple(obj.location) != (0.0, 0.0, 0.0):
                     errors.append(f"{obj.name}: Origin not at center.")
@@ -211,11 +211,11 @@ class PANTHOR_OT_validate_colliders(Operator):
 
         if errors:
             for e in errors:
-                self.report({'ERROR'}, e)
+                self.report({"ERROR"}, e)
         else:
-            self.report({'INFO'}, "All colliders validated successfully.")
+            self.report({"INFO"}, "All colliders validated successfully.")
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class PanthorColliderItem(PropertyGroup):
@@ -229,9 +229,9 @@ def _update_hide_colliders(self, context):
     scene = context.scene
     hide = scene.panthor_hide_colliders
     prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
-    
+
     for obj in scene.objects:
-        if obj.type == 'MESH' and any(obj.name.startswith(p) for p in prefixes):
+        if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
             obj.hide_viewport = hide
             obj.hide_render = hide
 
@@ -241,9 +241,9 @@ def _refresh_collider_list(context):
     scene = context.scene
     scene.panthor_colliders.clear()
     prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
-    
+
     for obj in scene.objects:
-        if obj.type == 'MESH' and any(obj.name.startswith(p) for p in prefixes):
+        if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
             item = scene.panthor_colliders.add()
             item.obj = obj
 
@@ -253,12 +253,12 @@ class PANTHOR_OT_refresh_colliders(Operator):
 
     bl_idname = "panthor.refresh_colliders"
     bl_label = "Refresh Colliders"
-    bl_options = {'REGISTER'}
+    bl_options = {"REGISTER"}
 
     def execute(self, context):
         """Execute refresh colliders."""
         _refresh_collider_list(context)
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class PANTHOR_OT_remove_collider(Operator):
@@ -266,7 +266,7 @@ class PANTHOR_OT_remove_collider(Operator):
 
     bl_idname = "panthor.remove_collider"
     bl_label = "Remove Collider"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute remove collider."""
@@ -274,22 +274,22 @@ class PANTHOR_OT_remove_collider(Operator):
         idx = scene.panthor_collider_index
 
         if idx < 0 or idx >= len(scene.panthor_colliders):
-            self.report({'WARNING'}, "No collider selected.")
-            return {'CANCELLED'}
+            self.report({"WARNING"}, "No collider selected.")
+            return {"CANCELLED"}
 
         item = scene.panthor_colliders[idx]
         obj = item.obj
 
         if not obj:
             scene.panthor_colliders.remove(idx)
-            return {'CANCELLED'}
+            return {"CANCELLED"}
 
         bpy.data.objects.remove(obj, do_unlink=True)
         _refresh_collider_list(context)
 
         scene.panthor_collider_index = min(idx, max(0, len(scene.panthor_colliders) - 1))
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def register():

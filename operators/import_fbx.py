@@ -48,24 +48,18 @@ class PANTHOR_OT_import_fbx(Operator):
 
     bl_idname = "panthor.import_fbx"
     bl_label = "Import FBX"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {"REGISTER", "UNDO"}
 
     filepath: StringProperty(subtype="FILE_PATH")
-    keep_lods: BoolProperty(
-        name="Keep LODs",
-        description="Keep LOD objects during import",
-        default=True
-    )
+    keep_lods: BoolProperty(name="Keep LODs", description="Keep LOD objects during import", default=True)
     keep_collisions: BoolProperty(
-        name="Keep Collisions",
-        description="Keep Collision objects during import",
-        default=True
+        name="Keep Collisions", description="Keep Collision objects during import", default=True
     )
 
     def invoke(self, context, event):
         """Invoke file selector."""
         context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
+        return {"RUNNING_MODAL"}
 
     def execute(self, context):
         """Execute the FBX import."""
@@ -75,8 +69,16 @@ class PANTHOR_OT_import_fbx(Operator):
         bpy.ops.import_scene.fbx(filepath=self.filepath)
 
         collider_prefixes = (
-            COLLIDER_PREFIX_BOX, COLLIDER_PREFIX_CONVEX, COLLIDER_PREFIX_SPHERE,
-            COLLIDER_PREFIX_CAPSULE, COLLIDER_PREFIX_CYLINDER, "UCX", "UBX", "USP", "UCS", "UCL"
+            COLLIDER_PREFIX_BOX,
+            COLLIDER_PREFIX_CONVEX,
+            COLLIDER_PREFIX_SPHERE,
+            COLLIDER_PREFIX_CAPSULE,
+            COLLIDER_PREFIX_CYLINDER,
+            "UCX",
+            "UBX",
+            "USP",
+            "UCS",
+            "UCL",
         )
 
         objects_to_delete = []
@@ -114,7 +116,7 @@ class PANTHOR_OT_import_fbx(Operator):
 
         # Delete unwanted objects
         if objects_to_delete:
-            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.select_all(action="DESELECT")
             for obj in objects_to_delete:
                 obj.select_set(True)
             bpy.ops.object.delete()
@@ -124,22 +126,22 @@ class PANTHOR_OT_import_fbx(Operator):
         # --- Organise into a collection ---
         # Derive a base name from the imported objects
         base_name = None
-        
+
         # 1. Look for LOD0
         for obj in imported_objects:
             if obj.name.upper().startswith("LOD0_"):
                 base_name = obj.name[5:]
                 break
-                
+
         # 2. Fallback to first non-collider mesh
         if not base_name:
             for obj in imported_objects:
-                if obj.type == 'MESH':
+                if obj.type == "MESH":
                     is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
                     if not is_collider:
                         base_name = obj.name
                         break
-                        
+
         # 3. Absolute fallback
         if not base_name:
             base_name = os.path.splitext(os.path.basename(self.filepath))[0]
@@ -162,10 +164,10 @@ class PANTHOR_OT_import_fbx(Operator):
         fallback_mesh = None
 
         for obj in imported_objects:
-            if obj.type == 'MESH':
+            if obj.type == "MESH":
                 if fallback_mesh is None:
                     fallback_mesh = obj
-                
+
                 name_lower = obj.name.lower()
                 is_lod = (
                     name_lower.startswith("lod")
@@ -177,7 +179,7 @@ class PANTHOR_OT_import_fbx(Operator):
                 if not is_lod and not is_collider:
                     base_mesh = obj
                     break
-        
+
         if base_mesh:
             bpy.context.view_layer.objects.active = base_mesh
         elif fallback_mesh:
@@ -186,8 +188,8 @@ class PANTHOR_OT_import_fbx(Operator):
         bpy.ops.panthor.refresh_lods()
         bpy.ops.panthor.refresh_colliders()
 
-        self.report({'INFO'}, f"Imported FBX into collection '{base_name}'")
-        return {'FINISHED'}
+        self.report({"INFO"}, f"Imported FBX into collection '{base_name}'")
+        return {"FINISHED"}
 
 
 def register():

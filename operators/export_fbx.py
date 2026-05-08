@@ -103,25 +103,25 @@ class PANTHOR_OT_export_fbx_ebt(Operator):
     @classmethod
     def poll(cls, context):
         """Check if EBT is available."""
-        return hasattr(bpy.ops, 'ebt') and hasattr(bpy.ops.ebt, 'export_fbx')
+        return hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "export_fbx")
 
     def execute(self, context):
         """Execute FBX export using EBT."""
         if not self.poll(context):
-            self.report({'ERROR'}, "Arma Reforger - Enfusion Tools plugin is required.")
-            return {'CANCELLED'}
-        
+            self.report({"ERROR"}, "Arma Reforger - Enfusion Tools plugin is required.")
+            return {"CANCELLED"}
+
         col_name = context.scene.get("panthor_import_col_real", "")
         col = bpy.data.collections.get(col_name) if col_name else None
-        
+
         if col:
-            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.select_all(action="DESELECT")
             for obj in col.objects:
                 obj.select_set(True)
-                if obj.type == 'MESH':
+                if obj.type == "MESH":
                     context.view_layer.objects.active = obj
         else:
-            self.report({'WARNING'}, "No specific collection found, exporting current selection.")
+            self.report({"WARNING"}, "No specific collection found, exporting current selection.")
 
         bpy.ops.ebt.export_fbx(quick_export=False)
         self.report({"INFO"}, "FBX exported using EBT")

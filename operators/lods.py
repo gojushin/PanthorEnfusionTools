@@ -11,9 +11,9 @@ _LOD_PREFIX = "LOD"
 def get_base_name(obj):
     """Get the base name without LOD prefix (e.g. 'LOD0_MyMesh' → 'MyMesh')."""
     name = obj.name
-    if name.startswith(_LOD_PREFIX) and "_" in name[len(_LOD_PREFIX):]:
+    if name.startswith(_LOD_PREFIX) and "_" in name[len(_LOD_PREFIX) :]:
         # Strip leading digits after "LOD" and the underscore separator
-        rest = name[len(_LOD_PREFIX):]  # e.g. "0_MyMesh"
+        rest = name[len(_LOD_PREFIX) :]  # e.g. "0_MyMesh"
         num_str, _, base = rest.partition("_")
         if num_str.isdigit():
             return base
@@ -30,7 +30,7 @@ def get_lod_objects(base_name):
         name = obj.name
         if not name.startswith(_LOD_PREFIX):
             continue
-        rest = name[len(_LOD_PREFIX):]  # e.g. "0_MyMesh"
+        rest = name[len(_LOD_PREFIX) :]  # e.g. "0_MyMesh"
         num_str, _, obj_base = rest.partition("_")
         if num_str.isdigit() and obj_base == base_name:
             lods.append((int(num_str), obj))
@@ -41,7 +41,7 @@ def get_lod_objects(base_name):
 def _refresh_lod_list(context):
     """Shared helper that populates the LOD UIList for the active object."""
     active = context.active_object
-    if not active or active.type != 'MESH':
+    if not active or active.type != "MESH":
         context.scene.panthor_lods.clear()
         return
 
@@ -83,12 +83,13 @@ def _refresh_lod_list(context):
 # Operators
 # ---------------------------------------------------------------------------
 
+
 class PANTHOR_OT_add_lod(Operator):
     """Add a new LOD using LOD0 as the base."""
 
     bl_idname = "panthor.add_lod"
     bl_label = "Add LOD"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(cls, context):
@@ -102,7 +103,7 @@ class PANTHOR_OT_add_lod(Operator):
         """Execute add LOD."""
         scene = context.scene
         lod0_obj = scene.panthor_lods[0].obj
-        
+
         base_name = get_base_name(lod0_obj)
 
         # Ensure the base object is named as LOD0_{base_name}
@@ -114,22 +115,22 @@ class PANTHOR_OT_add_lod(Operator):
         next_lod_num = (existing_lods[-1][0] + 1) if existing_lods else 1
 
         # Safely duplicate LOD0 without relying on previous selection state
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         lod0_obj.select_set(True)
         context.view_layer.objects.active = lod0_obj
-        
+
         bpy.ops.object.duplicate(linked=False)
         new_obj = context.active_object
         new_obj.name = f"LOD{next_lod_num}_{base_name}"
 
         # Add decimate modifier with progressive reduction
-        mod = new_obj.modifiers.new(name="Decimate", type='DECIMATE')
+        mod = new_obj.modifiers.new(name="Decimate", type="DECIMATE")
         mod.ratio = max(0.1, 1.0 - (0.25 * next_lod_num))
 
         # Auto-refresh the list
         _refresh_lod_list(context)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class PANTHOR_OT_remove_lod(Operator):
@@ -137,7 +138,7 @@ class PANTHOR_OT_remove_lod(Operator):
 
     bl_idname = "panthor.remove_lod"
     bl_label = "Remove LOD"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute remove LOD."""
@@ -145,21 +146,21 @@ class PANTHOR_OT_remove_lod(Operator):
         idx = scene.panthor_lod_index
 
         if idx < 0 or idx >= len(scene.panthor_lods):
-            self.report({'WARNING'}, "No LOD selected.")
-            return {'CANCELLED'}
+            self.report({"WARNING"}, "No LOD selected.")
+            return {"CANCELLED"}
 
         item = scene.panthor_lods[idx]
         obj = item.obj
 
         if not obj:
-            self.report({'WARNING'}, "LOD object no longer exists.")
+            self.report({"WARNING"}, "LOD object no longer exists.")
             scene.panthor_lods.remove(idx)
-            return {'CANCELLED'}
+            return {"CANCELLED"}
 
         # Prevent deleting LOD0 / base mesh
         if idx == 0:
-            self.report({'WARNING'}, "Cannot delete the base mesh (LOD0).")
-            return {'CANCELLED'}
+            self.report({"WARNING"}, "Cannot delete the base mesh (LOD0).")
+            return {"CANCELLED"}
 
         # Delete the Blender object
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -170,7 +171,7 @@ class PANTHOR_OT_remove_lod(Operator):
         # Clamp selected index
         scene.panthor_lod_index = min(idx, len(scene.panthor_lods) - 1)
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def update_decimate_ratio(self, context):
@@ -186,11 +187,7 @@ class PanthorLODItem(PropertyGroup):
     """Property group for UIList LOD items."""
 
     obj: PointerProperty(type=bpy.types.Object)
-    ratio: FloatProperty(
-        name="Ratio",
-        min=0.0, max=1.0,
-        update=update_decimate_ratio
-    )
+    ratio: FloatProperty(name="Ratio", min=0.0, max=1.0, update=update_decimate_ratio)
     has_modifier: bpy.props.BoolProperty()
     calc_ratio: FloatProperty()
 
@@ -200,12 +197,12 @@ class PANTHOR_OT_refresh_lods(Operator):
 
     bl_idname = "panthor.refresh_lods"
     bl_label = "Refresh LOD List"
-    bl_options = {'REGISTER'}
+    bl_options = {"REGISTER"}
 
     def execute(self, context):
         """Execute refresh."""
         _refresh_lod_list(context)
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def _update_hide_lods(self, _context):
@@ -223,7 +220,7 @@ def _update_hide_lods(self, _context):
         # Hide any object that carries a LOD prefix
         name = obj.name
         if name.startswith(_LOD_PREFIX):
-            rest = name[len(_LOD_PREFIX):]
+            rest = name[len(_LOD_PREFIX) :]
             num_str = rest.partition("_")[0]
             if num_str.isdigit():
                 obj.hide_viewport = hide
@@ -233,6 +230,7 @@ def _update_hide_lods(self, _context):
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register():
     """Register LOD operators."""

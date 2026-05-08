@@ -18,7 +18,7 @@ class PANTHOR_UL_lod_list(UIList):
                     row.prop(item, "ratio", text="")
                 else:
                     row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
-                    
+
                 row.prop(item.obj, "hide_viewport", text="", emboss=False)
             else:
                 row.label(text="<Missing>", icon="ERROR")
@@ -61,7 +61,7 @@ class PANTHOR_UL_collider_list(UIList):
                     c_icon = "MESH_CAPSULE"
                 elif name.startswith("UCL_"):
                     c_icon = "MESH_CYLINDER"
-                    
+
                 row.label(text=name, icon=c_icon)
             else:
                 row.label(text="<Missing>", icon="ERROR")
@@ -95,21 +95,29 @@ class PANTHOR_PT_main_panel(Panel):
         # --- Import Textures ---
         box = layout.box()
         box.label(text="2. Textures", icon="TEXTURE")
-        
+
         box.prop(context.scene, "panthor_texture_preset", text="Preset")
-        
+
         # Check if there are any embedded textures
-        has_embedded = any(img.has_data for img in bpy.data.images if img.type != 'RENDER_RESULT' and img.name != 'Render Result')
-        
+        has_embedded = any(
+            img.has_data for img in bpy.data.images if img.type != "RENDER_RESULT" and img.name != "Render Result"
+        )
+
         row = box.row(align=True)
         if has_embedded:
             row.operator("panthor.remap_embedded_textures", text="Remap Embedded Textures")
         else:
             row.operator("panthor.import_textures", text="Import & Remap Textures")
-            
+
         row = box.row()
         row.template_list(
-            "PANTHOR_UL_texture_list", "", context.scene, "panthor_textures", context.scene, "panthor_texture_index", rows=3
+            "PANTHOR_UL_texture_list",
+            "",
+            context.scene,
+            "panthor_textures",
+            context.scene,
+            "panthor_texture_index",
+            rows=3,
         )
         col = row.column(align=True)
         col.operator("panthor.refresh_textures", text="", icon="FILE_REFRESH")
@@ -123,13 +131,19 @@ class PANTHOR_PT_main_panel(Panel):
 
         row = box.row()
         row.template_list(
-            "PANTHOR_UL_collider_list", "", context.scene, "panthor_colliders", context.scene, "panthor_collider_index", rows=3
+            "PANTHOR_UL_collider_list",
+            "",
+            context.scene,
+            "panthor_colliders",
+            context.scene,
+            "panthor_collider_index",
+            rows=3,
         )
         col = row.column(align=True)
         col.operator("panthor.remove_collider", text="", icon="REMOVE")
         col.separator()
         col.operator("panthor.refresh_colliders", text="", icon="FILE_REFRESH")
-        
+
         box.prop(context.scene, "panthor_hide_colliders", text="Hide Colliders", icon="HIDE_ON")
 
         box.label(text="Add Primitive:")
@@ -162,12 +176,12 @@ class PANTHOR_PT_main_panel(Panel):
         # --- Export ---
         box = layout.box()
         box.label(text="5. Export FBX", icon="EXPORT")
-        
-        has_ebt = hasattr(bpy.ops, 'ebt') and hasattr(bpy.ops.ebt, 'export_fbx')
-        
+
+        has_ebt = hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "export_fbx")
+
         row = box.row()
         op = row.operator("panthor.export_fbx", text="Export FBX for Enfusion")
-        
+
         row = box.row()
         if not has_ebt:
             row.enabled = False
