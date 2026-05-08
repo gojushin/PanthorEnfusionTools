@@ -101,12 +101,14 @@ class PANTHOR_OT_add_collider(Operator):
             self.report({'WARNING'}, "Please select a mesh object first.")
             return {'CANCELLED'}
 
-        base_name = active.name
-        # Strip LODx_ prefix if present (e.g. "LOD0_MyMesh" → "MyMesh")
-        if base_name.startswith("LOD") and "_" in base_name[3:]:
-            num_str, _, rest = base_name[3:].partition("_")
-            if num_str.isdigit():
-                base_name = rest
+        base_name = context.scene.panthor_import_collection_name
+        if not base_name:
+            base_name = active.name
+            # Strip LODx_ prefix if present (e.g. "LOD0_MyMesh" → "MyMesh")
+            if base_name.startswith("LOD") and "_" in base_name[3:]:
+                num_str, _, rest = base_name[3:].partition("_")
+                if num_str.isdigit():
+                    base_name = rest
 
         # Get target bounding box
         center, dims = _get_bounding_box_info(active)
@@ -163,8 +165,18 @@ class PANTHOR_OT_add_collider(Operator):
         bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
 
+        # Link to the active object's collection
+        active_cols = active.users_collection
+        if active_cols:
+            for c in new_obj.users_collection:
+                c.objects.unlink(new_obj)
+            active_cols[0].objects.link(new_obj)
+
         # Enumerate to ensure correct suffix
         rename_and_enumerate_colliders()
+
+        # Refresh UI list
+        _refresh_collider_list(context)
 
         return {'FINISHED'}
 
@@ -249,6 +261,37 @@ class PANTHOR_OT_refresh_colliders(Operator):
         return {'FINISHED'}
 
 
+class PANTHOR_OT_remove_collider(Operator):
+    """Remove the selected collider and delete the object."""
+
+    bl_idname = "panthor.remove_collider"
+    bl_label = "Remove Collider"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        """Execute remove collider."""
+        scene = context.scene
+        idx = scene.panthor_collider_index
+
+        if idx < 0 or idx >= len(scene.panthor_colliders):
+            self.report({'WARNING'}, "No collider selected.")
+            return {'CANCELLED'}
+
+        item = scene.panthor_colliders[idx]
+        obj = item.obj
+
+        if not obj:
+            scene.panthor_colliders.remove(idx)
+            return {'CANCELLED'}
+
+        bpy.data.objects.remove(obj, do_unlink=True)
+        _refresh_collider_list(context)
+
+        scene.panthor_collider_index = min(idx, max(0, len(scene.panthor_colliders) - 1))
+
+        return {'FINISHED'}
+
+
 def register():
     """Register collider operators."""
     bpy.utils.register_class(PANTHOR_OT_fix_colliders)
@@ -264,10 +307,12 @@ def register():
         update=_update_hide_colliders,
     )
     bpy.utils.register_class(PANTHOR_OT_refresh_colliders)
+    bpy.utils.register_class(PANTHOR_OT_remove_collider)
 
 
 def unregister():
     """Unregister collider operators."""
+    bpy.utils.unregister_class(PANTHOR_OT_remove_collider)
     bpy.utils.unregister_class(PANTHOR_OT_refresh_colliders)
     del bpy.types.Scene.panthor_hide_colliders
     del bpy.types.Scene.panthor_collider_index

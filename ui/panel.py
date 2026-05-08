@@ -77,6 +77,8 @@ class PANTHOR_PT_main_panel(Panel):
             "PANTHOR_UL_collider_list", "", context.scene, "panthor_colliders", context.scene, "panthor_collider_index", rows=3
         )
         col = row.column(align=True)
+        col.operator("panthor.remove_collider", text="", icon="REMOVE")
+        col.separator()
         col.operator("panthor.refresh_colliders", text="", icon="FILE_REFRESH")
         
         box.prop(context.scene, "panthor_hide_colliders", text="Hide Colliders", icon="HIDE_ON")
@@ -111,7 +113,18 @@ class PANTHOR_PT_main_panel(Panel):
         # --- Export ---
         box = layout.box()
         box.label(text="5. Export FBX", icon="EXPORT")
-        box.operator("panthor.export_fbx", text="Export FBX for Enfusion")
+        
+        has_ebt = hasattr(bpy.ops, 'ebt') and hasattr(bpy.ops.ebt, 'export_fbx')
+        
+        row = box.row()
+        op = row.operator("panthor.export_fbx", text="Export FBX for Enfusion")
+        
+        row = box.row()
+        if not has_ebt:
+            row.enabled = False
+            row.operator("panthor.export_fbx_ebt", text="Export using EBT (Arma Reforger plugin required)")
+        else:
+            row.operator("panthor.export_fbx_ebt", text="Export using EBT")
 
 
 def register():

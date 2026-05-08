@@ -93,11 +93,48 @@ class PANTHOR_OT_export_fbx(Operator):
         return {"FINISHED"}
 
 
+class PANTHOR_OT_export_fbx_ebt(Operator):
+    """Export scene using the Arma Reforger EBT export function."""
+
+    bl_idname = "panthor.export_fbx_ebt"
+    bl_label = "Export using EBT"
+    bl_options = {"REGISTER"}
+
+    @classmethod
+    def poll(cls, context):
+        """Check if EBT is available."""
+        return hasattr(bpy.ops, 'ebt') and hasattr(bpy.ops.ebt, 'export_fbx')
+
+    def execute(self, context):
+        """Execute FBX export using EBT."""
+        if not self.poll(context):
+            self.report({'ERROR'}, "Arma Reforger - Enfusion Tools plugin is required.")
+            return {'CANCELLED'}
+        
+        col_name = context.scene.get("panthor_import_col_real", "")
+        col = bpy.data.collections.get(col_name) if col_name else None
+        
+        if col:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in col.objects:
+                obj.select_set(True)
+                if obj.type == 'MESH':
+                    context.view_layer.objects.active = obj
+        else:
+            self.report({'WARNING'}, "No specific collection found, exporting current selection.")
+
+        bpy.ops.ebt.export_fbx(quick_export=False)
+        self.report({"INFO"}, "FBX exported using EBT")
+        return {"FINISHED"}
+
+
 def register():
     """Register export operators."""
     bpy.utils.register_class(PANTHOR_OT_export_fbx)
+    bpy.utils.register_class(PANTHOR_OT_export_fbx_ebt)
 
 
 def unregister():
     """Unregister export operators."""
+    bpy.utils.unregister_class(PANTHOR_OT_export_fbx_ebt)
     bpy.utils.unregister_class(PANTHOR_OT_export_fbx)

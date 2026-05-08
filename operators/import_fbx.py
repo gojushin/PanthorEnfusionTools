@@ -32,10 +32,8 @@ def _update_collection_name(self, _context):
 
     # Rename objects inside the collection
     for obj in list(col.objects):
-        if obj.name == old_base or obj.name.startswith(f"{old_base}_"):
-            suffix = obj.name[len(old_base):]
-            obj.name = f"{new_base}{suffix}"
-
+        if old_base in obj.name:
+            obj.name = obj.name.replace(old_base, new_base)
             # Rename mesh data-block to match
             if obj.data:
                 obj.data.name = obj.name
