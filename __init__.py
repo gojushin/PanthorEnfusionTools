@@ -19,12 +19,8 @@ class PanthorAddonPreferences(AddonPreferences):
         layout = self.layout
         layout.label(text="Uninstall Panthor Enfusion Tools:")
         
-        if hasattr(bpy.ops, 'extensions') and hasattr(bpy.ops.extensions, 'package_uninstall'):
-            op = layout.operator("extensions.package_uninstall", text="Uninstall Extension", icon="TRASH")
-            op.pkg_id = "panthor_enfusion_tools"
-        else:
-            op = layout.operator("preferences.addon_remove", text="Uninstall Addon", icon="TRASH")
-            op.module = self.bl_idname
+        op = layout.operator("preferences.addon_remove", text="Uninstall Addon", icon="TRASH")
+        op.module = self.bl_idname
 
 
 def register():
