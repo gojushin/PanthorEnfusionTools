@@ -15,6 +15,7 @@ TEXTURE_SUFFIXES = {
     "METALNESS": ("metalness", "m", "metallic"),
     "OPACITY": ("opacity", "alpha", "a"),
     "MASK": ("mask", "maskmap"),
+    "AO": ("ao", "ambientocclusion", "occlusion"),
 }
 
 # Output Texture Prefixes and Suffixes

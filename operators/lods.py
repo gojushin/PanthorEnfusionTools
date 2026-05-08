@@ -156,7 +156,7 @@ class PANTHOR_OT_remove_lod(Operator):
 
         item = scene.panthor_lods[idx]
         obj = item.obj
-        
+
         lod0_obj = scene.panthor_lods[0].obj
 
         if not obj:

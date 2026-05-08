@@ -4,10 +4,19 @@
         {
             "name": "BCR",
             "mapping": {
-                "R": ["BASECOLOR.R"],
-                "G": ["BASECOLOR.G"],
-                "B": ["BASECOLOR.B"],
-                "A": ["ORM.G", "ROUGHNESS.R"]
+                "R": [
+                    "BASECOLOR.R"
+                ],
+                "G": [
+                    "BASECOLOR.G"
+                ],
+                "B": [
+                    "BASECOLOR.B"
+                ],
+                "A": [
+                    "ORM.G",
+                    "ROUGHNESS.R"
+                ]
             },
             "actions": {
                 "invert_red_channel": false,
@@ -19,10 +28,43 @@
         {
             "name": "NMO",
             "mapping": {
-                "R": ["NORMAL.R"],
-                "G": ["NORMAL.G"],
-                "B": ["ORM.B", "METALNESS.R"],
-                "A": ["OPACITY.R", "BASECOLOR.A"]
+                "R": [
+                    "NORMAL.R"
+                ],
+                "G": [
+                    "ORM.B",
+                    "METALNESS.R"
+                ],
+                "B": [
+                    "NORMAL.G"
+                ],
+                "A": [
+                    "ORM.R",
+                    "AO.R"
+                ]
+            },
+            "actions": {
+                "invert_red_channel": false,
+                "invert_green_channel": false,
+                "invert_blue_channel": false,
+                "invert_alpha_channel": false
+            }
+        },
+        {
+            "name": "A",
+            "mapping": {
+                "R": [
+                    "OPACITY.R"
+                ],
+                "G": [
+                    "OPACITY.R"
+                ],
+                "B": [
+                    "OPACITY.R"
+                ],
+                "A": [
+                    "OPACITY.R"
+                ]
             },
             "actions": {
                 "invert_red_channel": false,

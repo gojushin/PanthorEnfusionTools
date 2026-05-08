@@ -1,13 +1,22 @@
 {
-    "name": "Unity (HDRP)",
+    "name": "Unity (UPR/HDRP)",
     "maps": [
         {
             "name": "BCR",
             "mapping": {
-                "R": ["BASECOLOR.R"],
-                "G": ["BASECOLOR.G"],
-                "B": ["BASECOLOR.B"],
-                "A": ["MASK.A", "ROUGHNESS.R"]
+                "R": [
+                    "BASECOLOR.R"
+                ],
+                "G": [
+                    "BASECOLOR.G"
+                ],
+                "B": [
+                    "BASECOLOR.B"
+                ],
+                "A": [
+                    "MASK.A",
+                    "ROUGHNESS.R"
+                ]
             },
             "actions": {
                 "invert_red_channel": false,
@@ -19,14 +28,47 @@
         {
             "name": "NMO",
             "mapping": {
-                "R": ["NORMAL.R"],
-                "G": ["NORMAL.G"],
-                "B": ["MASK.R", "METALNESS.R"],
-                "A": ["MASK.G", "OPACITY.R", "BASECOLOR.A"]
+                "R": [
+                    "NORMAL.R"
+                ],
+                "G": [
+                    "MASK.R",
+                    "METALNESS.R"
+                ],
+                "B": [
+                    "NORMAL.G"
+                ],
+                "A": [
+                    "MASK.G",
+                    "AO.R"
+                ]
             },
             "actions": {
                 "invert_red_channel": false,
                 "invert_green_channel": true,
+                "invert_blue_channel": false,
+                "invert_alpha_channel": false
+            }
+        },
+        {
+            "name": "A",
+            "mapping": {
+                "R": [
+                    "OPACITY.R"
+                ],
+                "G": [
+                    "OPACITY.R"
+                ],
+                "B": [
+                    "OPACITY.R"
+                ],
+                "A": [
+                    "OPACITY.R"
+                ]
+            },
+            "actions": {
+                "invert_red_channel": false,
+                "invert_green_channel": false,
                 "invert_blue_channel": false,
                 "invert_alpha_channel": false
             }

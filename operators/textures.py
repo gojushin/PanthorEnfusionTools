@@ -22,7 +22,7 @@ def _refresh_texture_list(context):
     context.scene.panthor_textures.clear()
     for img in bpy.data.images:
         # Ignore rendering results and viewer nodes to only show actual texture data
-        if img.has_data and img.type != 'RENDER_RESULT' and img.name != 'Render Result':
+        if img.has_data and img.type != "RENDER_RESULT" and img.name != "Render Result":
             item = context.scene.panthor_textures.add()
             item.img = img
 
@@ -30,15 +30,64 @@ def _refresh_texture_list(context):
 def _get_image_by_suffix(images_list, material_name, suffixes):
     """Find an image in a list that matches the material name and suffix."""
     mat_lower = material_name.lower()
+
     for img in images_list:
         name_lower = img.name.lower()
-        # Remove extension
-        name_lower = os.path.splitext(name_lower)[0]
-        # Match material name or part of it
+
+        # Strip Blender's .001 suffixes or file extensions like .png
+        if "." in name_lower:
+            name_lower = name_lower.rsplit(".", 1)[0]
+
+        # Match material name exactly or without underscores
         if mat_lower in name_lower or mat_lower.replace("_", "") in name_lower.replace("_", ""):
             if any(name_lower.endswith(s) or f"_{s}" in name_lower for s in suffixes):
                 return img
     return None
+
+
+def _get_images_from_nodes(material):
+    """Extract images currently linked to the material's Principled BSDF."""
+    images = {}
+    if not material.use_nodes:
+        return images
+
+    bsdf = None
+    for node in material.node_tree.nodes:
+        if node.type == "BSDF_PRINCIPLED":
+            bsdf = node
+            break
+
+    if not bsdf:
+        return images
+
+    def get_image(input_name):
+        if input_name in bsdf.inputs:
+            for link in bsdf.inputs[input_name].links:
+                if link.from_node.type == "TEX_IMAGE":
+                    return link.from_node.image
+                if link.from_node.type == "NORMAL_MAP":
+                    for n_link in link.from_node.inputs["Color"].links:
+                        if n_link.from_node.type == "TEX_IMAGE":
+                            return n_link.from_node.image
+        return None
+
+    img_bc = get_image("Base Color")
+    if img_bc:
+        images["BASECOLOR"] = img_bc
+
+    img_n = get_image("Normal")
+    if img_n:
+        images["NORMAL"] = img_n
+
+    img_m = get_image("Metallic")
+    if img_m:
+        images["METALNESS"] = img_m
+
+    img_r = get_image("Roughness")
+    if img_r:
+        images["ROUGHNESS"] = img_r
+
+    return images
 
 
 def process_material_textures(material, images_list, preset_key):
@@ -47,10 +96,13 @@ def process_material_textures(material, images_list, preset_key):
     if not preset:
         return
 
-    # Collect available images for this material
-    available_images = {}
+    # First, try to pull exactly what Blender's FBX importer already wired up (for embedded textures)
+    available_images = _get_images_from_nodes(material)
+
+    # Fill in any missing maps by intelligently string-matching against the folder/images list
     for tex_type, suffixes in TEXTURE_SUFFIXES.items():
-        available_images[tex_type] = _get_image_by_suffix(images_list, material.name, suffixes)
+        if tex_type not in available_images or available_images[tex_type] is None:
+            available_images[tex_type] = _get_image_by_suffix(images_list, material.name, suffixes)
 
     generated_textures = {}
     for map_config in preset["maps"]:
@@ -80,20 +132,50 @@ def process_material_textures(material, images_list, preset_key):
     if "BCR" in generated_textures:
         tex_bcr = nodes.new("ShaderNodeTexImage")
         tex_bcr.image = generated_textures["BCR"]
-        tex_bcr.location = (-300, 100)
+        tex_bcr.location = (-600, 200)
         links.new(tex_bcr.outputs[0], bsdf.inputs["Base Color"])
+
+        # Alpha channel of BCR is Roughness
+        links.new(tex_bcr.outputs["Alpha"], bsdf.inputs["Roughness"])
 
     if "NMO" in generated_textures:
         tex_nmo = nodes.new("ShaderNodeTexImage")
         tex_nmo.image = generated_textures["NMO"]
-        tex_nmo.location = (-300, -200)
+        tex_nmo.location = (-600, -100)
         if tex_nmo.image:
             tex_nmo.image.colorspace_settings.name = "Non-Color"
 
-        normal_map = nodes.new("ShaderNodeNormalMap")
-        normal_map.location = (-100, -200)
-        links.new(tex_nmo.outputs[0], normal_map.inputs["Color"])
-        links.new(normal_map.outputs[0], bsdf.inputs["Normal"])
+        # NMO: R+B = Normal, G = Metallic, A = AO
+        sep = nodes.new("ShaderNodeSeparateColor")
+        sep.location = (-400, -100)
+        links.new(tex_nmo.outputs[0], sep.inputs[0])
+
+        # Metallic
+        links.new(sep.outputs["Green"], bsdf.inputs["Metallic"])
+
+        # Normal Map reconstruction (R, B, 1.0)
+        comb = nodes.new("ShaderNodeCombineColor")
+        comb.location = (-200, -100)
+        links.new(sep.outputs["Red"], comb.inputs["Red"])
+        links.new(sep.outputs["Blue"], comb.inputs["Green"])  # We use Blue as the Y channel
+        comb.inputs["Blue"].default_value = 1.0
+
+        norm_map = nodes.new("ShaderNodeNormalMap")
+        norm_map.location = (0, -200)
+        links.new(comb.outputs[0], norm_map.inputs["Color"])
+        links.new(norm_map.outputs[0], bsdf.inputs["Normal"])
+
+    if "A" in generated_textures:
+        tex_a = nodes.new("ShaderNodeTexImage")
+        tex_a.image = generated_textures["A"]
+        tex_a.location = (-600, -400)
+        if tex_a.image:
+            tex_a.image.colorspace_settings.name = "Non-Color"
+
+        links.new(tex_a.outputs[0], bsdf.inputs["Alpha"])
+        # Set blend mode to Alpha Clip or Blend if opacity is present
+        material.blend_method = "CLIP"
+        material.shadow_method = "CLIP"
 
 
 class PANTHOR_OT_remap_embedded_textures(Operator):
