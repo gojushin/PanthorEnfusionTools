@@ -22,6 +22,22 @@ class PANTHOR_UL_lod_list(UIList):
             layout.label(text="", icon="OBJECT_DATAMODE")
 
 
+class PANTHOR_UL_collider_list(UIList):
+    """UIList for Colliders."""
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        """Draw item in the list."""
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            row = layout.row(align=True)
+            if item.obj:
+                row.label(text=item.obj.name, icon="MESH_CUBE")
+            else:
+                row.label(text="<Missing>", icon="ERROR")
+        elif self.layout_type == "GRID":
+            layout.alignment = "CENTER"
+            layout.label(text="", icon="MESH_CUBE")
+
+
 class PANTHOR_PT_main_panel(Panel):
     """Main Panel for Panthor Enfusion Tools."""
 
@@ -55,6 +71,15 @@ class PANTHOR_PT_main_panel(Panel):
         row = box.row()
         row.operator("panthor.fix_colliders", text="Fix Colliders", icon="AUTO")
         row.operator("panthor.validate_colliders", text="Validate", icon="CHECKMARK")
+
+        row = box.row()
+        row.template_list(
+            "PANTHOR_UL_collider_list", "", context.scene, "panthor_colliders", context.scene, "panthor_collider_index", rows=3
+        )
+        col = row.column(align=True)
+        col.operator("panthor.refresh_colliders", text="", icon="FILE_REFRESH")
+        
+        box.prop(context.scene, "panthor_hide_colliders", text="Hide Colliders", icon="HIDE_ON")
 
         box.label(text="Add Primitive:")
         row = box.row(align=True)
@@ -92,10 +117,12 @@ class PANTHOR_PT_main_panel(Panel):
 def register():
     """Register UI elements."""
     bpy.utils.register_class(PANTHOR_UL_lod_list)
+    bpy.utils.register_class(PANTHOR_UL_collider_list)
     bpy.utils.register_class(PANTHOR_PT_main_panel)
 
 
 def unregister():
     """Unregister UI elements."""
     bpy.utils.unregister_class(PANTHOR_PT_main_panel)
+    bpy.utils.unregister_class(PANTHOR_UL_collider_list)
     bpy.utils.unregister_class(PANTHOR_UL_lod_list)

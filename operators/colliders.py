@@ -1,7 +1,8 @@
 """Collider Setup and Validation Operators."""
 
 import bpy
-from bpy.types import Operator
+from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty
+from bpy.types import Operator, PropertyGroup
 
 from ..utils.constants import (
     COLLIDER_PREFIX_BOX,
@@ -205,15 +206,73 @@ class PANTHOR_OT_validate_colliders(Operator):
         return {'FINISHED'}
 
 
+class PanthorColliderItem(PropertyGroup):
+    """Property group for UIList collider items."""
+
+    obj: PointerProperty(type=bpy.types.Object)
+
+
+def _update_hide_colliders(self, context):
+    """Toggle visibility of collider objects."""
+    scene = context.scene
+    hide = scene.panthor_hide_colliders
+    prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
+    
+    for obj in scene.objects:
+        if obj.type == 'MESH' and any(obj.name.startswith(p) for p in prefixes):
+            obj.hide_viewport = hide
+            obj.hide_render = hide
+
+
+def _refresh_collider_list(context):
+    """Refresh the collider list UI."""
+    scene = context.scene
+    scene.panthor_colliders.clear()
+    prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
+    
+    for obj in scene.objects:
+        if obj.type == 'MESH' and any(obj.name.startswith(p) for p in prefixes):
+            item = scene.panthor_colliders.add()
+            item.obj = obj
+
+
+class PANTHOR_OT_refresh_colliders(Operator):
+    """Refresh the collider list."""
+
+    bl_idname = "panthor.refresh_colliders"
+    bl_label = "Refresh Colliders"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        """Execute refresh colliders."""
+        _refresh_collider_list(context)
+        return {'FINISHED'}
+
+
 def register():
     """Register collider operators."""
     bpy.utils.register_class(PANTHOR_OT_fix_colliders)
     bpy.utils.register_class(PANTHOR_OT_add_collider)
     bpy.utils.register_class(PANTHOR_OT_validate_colliders)
+    bpy.utils.register_class(PanthorColliderItem)
+    bpy.types.Scene.panthor_colliders = CollectionProperty(type=PanthorColliderItem)
+    bpy.types.Scene.panthor_collider_index = IntProperty()
+    bpy.types.Scene.panthor_hide_colliders = BoolProperty(
+        name="Hide Colliders",
+        description="Hide all collider objects in the viewport",
+        default=False,
+        update=_update_hide_colliders,
+    )
+    bpy.utils.register_class(PANTHOR_OT_refresh_colliders)
 
 
 def unregister():
     """Unregister collider operators."""
+    bpy.utils.unregister_class(PANTHOR_OT_refresh_colliders)
+    del bpy.types.Scene.panthor_hide_colliders
+    del bpy.types.Scene.panthor_collider_index
+    del bpy.types.Scene.panthor_colliders
+    bpy.utils.unregister_class(PanthorColliderItem)
     bpy.utils.unregister_class(PANTHOR_OT_validate_colliders)
     bpy.utils.unregister_class(PANTHOR_OT_add_collider)
     bpy.utils.unregister_class(PANTHOR_OT_fix_colliders)

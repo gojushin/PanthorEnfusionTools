@@ -140,6 +140,24 @@ class PANTHOR_OT_import_fbx(Operator):
         context.scene["panthor_import_col_real"] = col.name
         context.scene.panthor_import_collection_name = base_name
 
+        # Make base mesh active so refresh_lods works, then refresh UI lists
+        for obj in imported_objects:
+            if obj.type == 'MESH':
+                name_lower = obj.name.lower()
+                is_lod = (
+                    name_lower.startswith("lod")
+                    and len(name_lower) > 3
+                    and name_lower[3].isdigit()
+                    and "_" in name_lower[3:]
+                )
+                is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
+                if not is_lod and not is_collider:
+                    bpy.context.view_layer.objects.active = obj
+                    break
+
+        bpy.ops.panthor.refresh_lods()
+        bpy.ops.panthor.refresh_colliders()
+
         self.report({'INFO'}, f"Imported FBX into collection '{base_name}'")
         return {'FINISHED'}
 
