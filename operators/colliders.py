@@ -64,6 +64,31 @@ def _get_bounding_box_info(obj: Object) -> tuple[mathutils.Vector, mathutils.Vec
     return center, dims
 
 
+def _add_capsule(radius: float, height: float):
+    """Create a capsule mesh by stretching a UV Sphere."""
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=radius)
+    obj = bpy.context.active_object
+
+    # If height is greater than diameter, stretch it
+    if height > radius * 2:
+        move_amount = (height - radius * 2) / 2
+        import bmesh
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+
+        for v in bm.verts:
+            if v.co.z > 0.001:
+                v.co.z += move_amount
+            elif v.co.z < -0.001:
+                v.co.z -= move_amount
+
+        bm.to_mesh(obj.data)
+        bm.free()
+
+    return obj
+
+
 class PanthorOTFixColliders(Operator):
     """Rename Box colliders and enumerate all colliders."""
 
@@ -115,33 +140,34 @@ class PanthorOTAddCollider(Operator):
         center, dims = _get_bounding_box_info(active)
         dx, dy, dz = dims.x, dims.y, dims.z
 
-        prim_map = {
-            "BOX": (bpy.ops.mesh.primitive_cube_add, COLLIDER_PREFIX_BOX, lambda: (dx / 2, dy / 2, dz / 2)),
-            "CONVEX": (bpy.ops.mesh.primitive_cube_add, COLLIDER_PREFIX_CONVEX, lambda: (dx / 2, dy / 2, dz / 2)),
-            "SPHERE": (
-                bpy.ops.mesh.primitive_uv_sphere_add,
-                COLLIDER_PREFIX_SPHERE,
-                lambda: (max(dx, dy, dz) / 2,) * 3,
-            ),
-            "CAPSULE": (
-                bpy.ops.mesh.primitive_cylinder_add,
-                COLLIDER_PREFIX_CAPSULE,
-                lambda: (max(dx, dy) / 2,) * 2 + (dz / 2,),
-            ),
-            "CYLINDER": (
-                bpy.ops.mesh.primitive_cylinder_add,
-                COLLIDER_PREFIX_CYLINDER,
-                lambda: (max(dx, dy) / 2,) * 2 + (dz / 2,),
-            ),
-        }
-
-        if self.collider_type not in prim_map:
+        # Create the primitive
+        if self.collider_type == "BOX":
+            bpy.ops.mesh.primitive_cube_add()
+            new_obj = context.active_object
+            new_obj.scale = (dx / 2, dy / 2, dz / 2)
+            prefix = COLLIDER_PREFIX_BOX
+        elif self.collider_type == "CONVEX":
+            bpy.ops.mesh.primitive_cube_add()
+            new_obj = context.active_object
+            new_obj.scale = (dx / 2, dy / 2, dz / 2)
+            prefix = COLLIDER_PREFIX_CONVEX
+        elif self.collider_type == "SPHERE":
+            radius = max(dx, dy, dz) / 2
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=radius)
+            new_obj = context.active_object
+            prefix = COLLIDER_PREFIX_SPHERE
+        elif self.collider_type == "CAPSULE":
+            radius = max(dx, dy) / 2
+            new_obj = _add_capsule(radius, dz)
+            prefix = COLLIDER_PREFIX_CAPSULE
+        elif self.collider_type == "CYLINDER":
+            radius = max(dx, dy) / 2
+            bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=dz)
+            new_obj = context.active_object
+            prefix = COLLIDER_PREFIX_CYLINDER
+        else:
             return {"CANCELLED"}
 
-        op, prefix, scale_func = prim_map[self.collider_type]
-        op()
-        new_obj = context.active_object
-        new_obj.scale = scale_func()
         new_obj.location = center
         new_obj.name = f"{prefix}{base_name}"
 

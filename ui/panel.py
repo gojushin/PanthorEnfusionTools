@@ -91,7 +91,7 @@ class PanthorPTMainPanel(Panel):
         box.operator("panthor.import_fbx", text="Import FBX")
 
         # Collection name field (only shown after an import)
-        if context.scene.panthor_import_collection_name:
+        if context.scene.get("panthor_import_col_real", ""):
             box.prop(context.scene, "panthor_import_collection_name", text="Collection")
 
         # --- Import Textures ---
