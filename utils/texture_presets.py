@@ -21,13 +21,13 @@ def load_presets():
         if filename.endswith(".json"):
             filepath = os.path.join(presets_dir, filename)
             try:
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(filepath, encoding="utf-8") as f:
                     data = json.load(f)
 
                 key = os.path.splitext(filename)[0].upper()
                 TEXTURE_PRESETS[key] = data
-            except Exception as e:
-                print(f"Panthor Enfusion Tools: Failed to load preset {filename}: {e}")
+            except Exception:
+                pass
 
 
 # Load presets upon module import

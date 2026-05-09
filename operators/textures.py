@@ -1,10 +1,11 @@
 """Texture operators."""
 
 import os
+from typing import ClassVar
 
 import bpy
 from bpy.props import CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
-from bpy.types import Operator, PropertyGroup
+from bpy.types import Image, Material, Operator, PropertyGroup
 
 from ..utils.constants import TEXTURE_SUFFIXES
 from ..utils.texture_presets import TEXTURE_PRESETS
@@ -27,7 +28,7 @@ def _refresh_texture_list(context):
             item.img = img
 
 
-def _get_image_by_suffix(images_list, material_name, suffixes):
+def _get_image_by_suffix(images_list: list[Image], material_name: str, suffixes: list[str]) -> Image | None:
     """Find an image in a list that matches the material name and suffix."""
     mat_lower = material_name.lower()
 
@@ -39,53 +40,51 @@ def _get_image_by_suffix(images_list, material_name, suffixes):
             name_lower = name_lower.rsplit(".", 1)[0]
 
         # Match material name exactly or without underscores
-        if mat_lower in name_lower or mat_lower.replace("_", "") in name_lower.replace("_", ""):
-            if any(name_lower.endswith(s) or f"_{s}" in name_lower for s in suffixes):
-                return img
+        if (mat_lower in name_lower or mat_lower.replace("_", "") in name_lower.replace("_", "")) and any(
+            name_lower.endswith(s) or f"_{s}" in name_lower for s in suffixes
+        ):
+            return img
     return None
 
 
-def _get_images_from_nodes(material):
+def _get_image_from_bsdf_input(bsdf: bpy.types.ShaderNodeBsdfPrincipled, input_name: str) -> Image | None:
+    """Get an image from a BSDF input, handling Normal Maps."""
+    if input_name not in bsdf.inputs:
+        return None
+
+    for link in bsdf.inputs[input_name].links:
+        from_node = link.from_node
+        if from_node.type == "TEX_IMAGE":
+            return from_node.image
+        if from_node.type == "NORMAL_MAP":
+            for n_link in from_node.inputs["Color"].links:
+                if n_link.from_node.type == "TEX_IMAGE":
+                    return n_link.from_node.image
+    return None
+
+
+def _get_images_from_nodes(material: Material) -> dict[str, Image]:
     """Extract images currently linked to the material's Principled BSDF."""
     images = {}
     if not material.use_nodes:
         return images
 
-    bsdf = None
-    for node in material.node_tree.nodes:
-        if node.type == "BSDF_PRINCIPLED":
-            bsdf = node
-            break
-
+    bsdf = next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
     if not bsdf:
         return images
 
-    def get_image(input_name):
-        if input_name in bsdf.inputs:
-            for link in bsdf.inputs[input_name].links:
-                if link.from_node.type == "TEX_IMAGE":
-                    return link.from_node.image
-                if link.from_node.type == "NORMAL_MAP":
-                    for n_link in link.from_node.inputs["Color"].links:
-                        if n_link.from_node.type == "TEX_IMAGE":
-                            return n_link.from_node.image
-        return None
+    # Map input names to their texture keys
+    mapping = {
+        "Base Color": "BASECOLOR",
+        "Normal": "NORMAL",
+        "Metallic": "METALNESS",
+        "Roughness": "ROUGHNESS",
+    }
 
-    img_bc = get_image("Base Color")
-    if img_bc:
-        images["BASECOLOR"] = img_bc
-
-    img_n = get_image("Normal")
-    if img_n:
-        images["NORMAL"] = img_n
-
-    img_m = get_image("Metallic")
-    if img_m:
-        images["METALNESS"] = img_m
-
-    img_r = get_image("Roughness")
-    if img_r:
-        images["ROUGHNESS"] = img_r
+    for input_name, tex_key in mapping.items():
+        img = _get_image_from_bsdf_input(bsdf, input_name)
+        if img:
+            images[tex_key] = img
 
     return images
 
@@ -109,10 +108,7 @@ def process_material_textures(material, images_list, preset_key):
         tex_name = f"PTR_{material.name}_{map_config['name']}"
 
         # Determine fallback color based on typical use
-        if map_config["name"] == "NMO":
-            fallback = (0.5, 0.5, 0.0, 1.0)
-        else:
-            fallback = (1.0, 1.0, 1.0, 1.0)
+        fallback = (0.5, 0.5, 0.0, 1.0) if map_config["name"] == "NMO" else (1.0, 1.0, 1.0, 1.0)
 
         img = generate_texture(tex_name, map_config, available_images, fallback_color=fallback)
         generated_textures[map_config["name"]] = img
@@ -178,12 +174,12 @@ def process_material_textures(material, images_list, preset_key):
         material.shadow_method = "CLIP"
 
 
-class PANTHOR_OT_remap_embedded_textures(Operator):
+class PanthorOTRemapEmbeddedTextures(Operator):
     """Remap embedded textures according to the selected preset."""
 
-    bl_idname = "panthor.remap_embedded_textures"
-    bl_label = "Remap Embedded Textures"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.remap_embedded_textures"
+    bl_label: ClassVar[str] = "Remap Embedded Textures"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute."""
@@ -207,12 +203,12 @@ class PANTHOR_OT_remap_embedded_textures(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_import_textures(Operator):
+class PanthorOTImportTextures(Operator):
     """Import textures from a directory and remap them."""
 
-    bl_idname = "panthor.import_textures"
-    bl_label = "Import & Remap Textures"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.import_textures"
+    bl_label: ClassVar[str] = "Import & Remap Textures"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     directory: StringProperty(subtype="DIR_PATH")
 
@@ -253,12 +249,12 @@ class PANTHOR_OT_import_textures(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_refresh_textures(Operator):
+class PanthorOTRefreshTextures(Operator):
     """Refresh the list of imported textures."""
 
-    bl_idname = "panthor.refresh_textures"
-    bl_label = "Refresh Textures"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.refresh_textures"
+    bl_label: ClassVar[str] = "Refresh Textures"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute refresh."""
@@ -271,9 +267,9 @@ def register():
     from ..utils.texture_presets import get_preset_items
 
     bpy.utils.register_class(PanthorTextureItem)
-    bpy.utils.register_class(PANTHOR_OT_remap_embedded_textures)
-    bpy.utils.register_class(PANTHOR_OT_import_textures)
-    bpy.utils.register_class(PANTHOR_OT_refresh_textures)
+    bpy.utils.register_class(PanthorOTRemapEmbeddedTextures)
+    bpy.utils.register_class(PanthorOTImportTextures)
+    bpy.utils.register_class(PanthorOTRefreshTextures)
 
     bpy.types.Scene.panthor_textures = CollectionProperty(type=PanthorTextureItem)
     bpy.types.Scene.panthor_texture_index = IntProperty()
@@ -290,7 +286,7 @@ def unregister():
     del bpy.types.Scene.panthor_texture_index
     del bpy.types.Scene.panthor_textures
 
-    bpy.utils.unregister_class(PANTHOR_OT_refresh_textures)
-    bpy.utils.unregister_class(PANTHOR_OT_import_textures)
-    bpy.utils.unregister_class(PANTHOR_OT_remap_embedded_textures)
+    bpy.utils.unregister_class(PanthorOTRefreshTextures)
+    bpy.utils.unregister_class(PanthorOTImportTextures)
+    bpy.utils.unregister_class(PanthorOTRemapEmbeddedTextures)
     bpy.utils.unregister_class(PanthorTextureItem)

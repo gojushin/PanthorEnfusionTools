@@ -1,10 +1,12 @@
 """UI Panel for Panthor Enfusion Tools."""
 
+from typing import ClassVar
+
 import bpy
 from bpy.types import Panel, UIList
 
 
-class PANTHOR_UL_lod_list(UIList):
+class PanthorULLodList(UIList):
     """UIList for LODs."""
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -27,7 +29,7 @@ class PANTHOR_UL_lod_list(UIList):
             layout.label(text="", icon="OBJECT_DATAMODE")
 
 
-class PANTHOR_UL_texture_list(UIList):
+class PanthorULTextureList(UIList):
     """UIList for Textures."""
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -43,7 +45,7 @@ class PANTHOR_UL_texture_list(UIList):
             layout.label(text="", icon="IMAGE_DATA")
 
 
-class PANTHOR_UL_collider_list(UIList):
+class PanthorULColliderList(UIList):
     """UIList for Colliders."""
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -70,14 +72,14 @@ class PANTHOR_UL_collider_list(UIList):
             layout.label(text="", icon="MESH_CUBE")
 
 
-class PANTHOR_PT_main_panel(Panel):
+class PanthorPTMainPanel(Panel):
     """Main Panel for Panthor Enfusion Tools."""
 
-    bl_label = "Panthor Enfusion Tools"
-    bl_idname = "PANTHOR_PT_main_panel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Panthor"
+    bl_label: ClassVar[str] = "Panthor Enfusion Tools"
+    bl_idname: ClassVar[str] = "PANTHOR_PT_main_panel"
+    bl_space_type: ClassVar[str] = "VIEW_3D"
+    bl_region_type: ClassVar[str] = "UI"
+    bl_category: ClassVar[str] = "Panthor"
 
     def draw(self, context):
         """Draw the panel."""
@@ -111,7 +113,7 @@ class PANTHOR_PT_main_panel(Panel):
 
         row = box.row()
         row.template_list(
-            "PANTHOR_UL_texture_list",
+            "PanthorULTextureList",
             "",
             context.scene,
             "panthor_textures",
@@ -131,7 +133,7 @@ class PANTHOR_PT_main_panel(Panel):
 
         row = box.row()
         row.template_list(
-            "PANTHOR_UL_collider_list",
+            "PanthorULColliderList",
             "",
             context.scene,
             "panthor_colliders",
@@ -161,7 +163,7 @@ class PANTHOR_PT_main_panel(Panel):
 
         row = box.row()
         row.template_list(
-            "PANTHOR_UL_lod_list", "", context.scene, "panthor_lods", context.scene, "panthor_lod_index", rows=3
+            "PanthorULLodList", "", context.scene, "panthor_lods", context.scene, "panthor_lod_index", rows=3
         )
 
         col = row.column(align=True)
@@ -180,7 +182,7 @@ class PANTHOR_PT_main_panel(Panel):
         has_ebt = hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "export_fbx")
 
         row = box.row()
-        op = row.operator("panthor.export_fbx", text="Export FBX for Enfusion")
+        row.operator("panthor.export_fbx", text="Export FBX for Enfusion")
 
         row = box.row()
         if not has_ebt:
@@ -192,15 +194,15 @@ class PANTHOR_PT_main_panel(Panel):
 
 def register():
     """Register UI elements."""
-    bpy.utils.register_class(PANTHOR_UL_lod_list)
-    bpy.utils.register_class(PANTHOR_UL_texture_list)
-    bpy.utils.register_class(PANTHOR_UL_collider_list)
-    bpy.utils.register_class(PANTHOR_PT_main_panel)
+    bpy.utils.register_class(PanthorULLodList)
+    bpy.utils.register_class(PanthorULTextureList)
+    bpy.utils.register_class(PanthorULColliderList)
+    bpy.utils.register_class(PanthorPTMainPanel)
 
 
 def unregister():
     """Unregister UI elements."""
-    bpy.utils.unregister_class(PANTHOR_PT_main_panel)
-    bpy.utils.unregister_class(PANTHOR_UL_collider_list)
-    bpy.utils.unregister_class(PANTHOR_UL_texture_list)
-    bpy.utils.unregister_class(PANTHOR_UL_lod_list)
+    bpy.utils.unregister_class(PanthorPTMainPanel)
+    bpy.utils.unregister_class(PanthorULColliderList)
+    bpy.utils.unregister_class(PanthorULTextureList)
+    bpy.utils.unregister_class(PanthorULLodList)

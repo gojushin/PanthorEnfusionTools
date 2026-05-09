@@ -1,8 +1,11 @@
 """Collider Setup and Validation Operators."""
 
+from typing import ClassVar
+
 import bpy
+import mathutils
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty
-from bpy.types import Operator, PropertyGroup
+from bpy.types import Context, Object, Operator, PropertyGroup
 
 from ..utils.constants import (
     COLLIDER_PREFIX_BOX,
@@ -47,10 +50,8 @@ def rename_and_enumerate_colliders():
                 obj.name = f"{key}_{base_counts[key]:02d}"
 
 
-def _get_bounding_box_info(obj):
+def _get_bounding_box_info(obj: Object) -> tuple[mathutils.Vector, mathutils.Vector]:
     """Return (center, dimensions) for *obj* in world space."""
-    import mathutils
-
     corners = [obj.matrix_world @ mathutils.Vector(c) for c in obj.bound_box]
     xs = [c.x for c in corners]
     ys = [c.y for c in corners]
@@ -63,12 +64,12 @@ def _get_bounding_box_info(obj):
     return center, dims
 
 
-class PANTHOR_OT_fix_colliders(Operator):
+class PanthorOTFixColliders(Operator):
     """Rename Box colliders and enumerate all colliders."""
 
-    bl_idname = "panthor.fix_colliders"
-    bl_label = "Fix Colliders"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.fix_colliders"
+    bl_label: ClassVar[str] = "Fix Colliders"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute fix colliders."""
@@ -77,12 +78,12 @@ class PANTHOR_OT_fix_colliders(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_add_collider(Operator):
+class PanthorOTAddCollider(Operator):
     """Add a primitive collider fitted to the active object's bounding box."""
 
-    bl_idname = "panthor.add_collider"
-    bl_label = "Add Collider"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.add_collider"
+    bl_label: ClassVar[str] = "Add Collider"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     collider_type: bpy.props.EnumProperty(
         items=[
@@ -94,7 +95,7 @@ class PANTHOR_OT_add_collider(Operator):
         ]
     )
 
-    def execute(self, context):
+    def execute(self, context: Context):
         """Add primitive collider fitted to the target mesh."""
         active = context.active_object
         if not active or active.type != "MESH":
@@ -114,50 +115,34 @@ class PANTHOR_OT_add_collider(Operator):
         center, dims = _get_bounding_box_info(active)
         dx, dy, dz = dims.x, dims.y, dims.z
 
-        # Create the primitive and fit it into the bounding box
-        if self.collider_type == "BOX":
-            bpy.ops.mesh.primitive_cube_add()
-            prefix = COLLIDER_PREFIX_BOX
-            new_obj = context.active_object
-            # Default cube is 2×2×2 — scale to half-dims
-            new_obj.scale = (dx / 2, dy / 2, dz / 2)
-            new_obj.location = center
+        prim_map = {
+            "BOX": (bpy.ops.mesh.primitive_cube_add, COLLIDER_PREFIX_BOX, lambda: (dx / 2, dy / 2, dz / 2)),
+            "CONVEX": (bpy.ops.mesh.primitive_cube_add, COLLIDER_PREFIX_CONVEX, lambda: (dx / 2, dy / 2, dz / 2)),
+            "SPHERE": (
+                bpy.ops.mesh.primitive_uv_sphere_add,
+                COLLIDER_PREFIX_SPHERE,
+                lambda: (max(dx, dy, dz) / 2,) * 3,
+            ),
+            "CAPSULE": (
+                bpy.ops.mesh.primitive_cylinder_add,
+                COLLIDER_PREFIX_CAPSULE,
+                lambda: (max(dx, dy) / 2,) * 2 + (dz / 2,),
+            ),
+            "CYLINDER": (
+                bpy.ops.mesh.primitive_cylinder_add,
+                COLLIDER_PREFIX_CYLINDER,
+                lambda: (max(dx, dy) / 2,) * 2 + (dz / 2,),
+            ),
+        }
 
-        elif self.collider_type == "CONVEX":
-            bpy.ops.mesh.primitive_cube_add()
-            prefix = COLLIDER_PREFIX_CONVEX
-            new_obj = context.active_object
-            new_obj.scale = (dx / 2, dy / 2, dz / 2)
-            new_obj.location = center
+        if self.collider_type not in prim_map:
+            return {"CANCELLED"}
 
-        elif self.collider_type == "SPHERE":
-            bpy.ops.mesh.primitive_uv_sphere_add()
-            prefix = COLLIDER_PREFIX_SPHERE
-            new_obj = context.active_object
-            # Default UV sphere radius = 1 — uniform scale to fit the largest axis
-            radius = max(dx, dy, dz) / 2
-            new_obj.scale = (radius, radius, radius)
-            new_obj.location = center
-
-        elif self.collider_type == "CAPSULE":
-            bpy.ops.mesh.primitive_cylinder_add()
-            prefix = COLLIDER_PREFIX_CAPSULE
-            new_obj = context.active_object
-            # Default cylinder: radius 1, depth 2 — scale Z only to match height
-            z_scale = dz / 2
-            uniform_r = max(dx, dy) / 2
-            new_obj.scale = (uniform_r, uniform_r, z_scale)
-            new_obj.location = center
-
-        elif self.collider_type == "CYLINDER":
-            bpy.ops.mesh.primitive_cylinder_add()
-            prefix = COLLIDER_PREFIX_CYLINDER
-            new_obj = context.active_object
-            z_scale = dz / 2
-            uniform_r = max(dx, dy) / 2
-            new_obj.scale = (uniform_r, uniform_r, z_scale)
-            new_obj.location = center
-
+        op, prefix, scale_func = prim_map[self.collider_type]
+        op()
+        new_obj = context.active_object
+        new_obj.scale = scale_func()
+        new_obj.location = center
         new_obj.name = f"{prefix}{base_name}"
 
         # Apply rotation and scale, then set origin to geometry
@@ -181,12 +166,12 @@ class PANTHOR_OT_add_collider(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_validate_colliders(Operator):
+class PanthorOTValidateColliders(Operator):
     """Check colliders for errors."""
 
-    bl_idname = "panthor.validate_colliders"
-    bl_label = "Validate Colliders"
-    bl_options = {"REGISTER"}
+    bl_idname: ClassVar[str] = "panthor.validate_colliders"
+    bl_label: ClassVar[str] = "Validate Colliders"
+    bl_options: ClassVar[set[str]] = {"REGISTER"}
 
     def execute(self, context):
         """Validate all colliders."""
@@ -248,12 +233,12 @@ def _refresh_collider_list(context):
             item.obj = obj
 
 
-class PANTHOR_OT_refresh_colliders(Operator):
+class PanthorOTRefreshColliders(Operator):
     """Refresh the collider list."""
 
-    bl_idname = "panthor.refresh_colliders"
-    bl_label = "Refresh Colliders"
-    bl_options = {"REGISTER"}
+    bl_idname: ClassVar[str] = "panthor.refresh_colliders"
+    bl_label: ClassVar[str] = "Refresh Colliders"
+    bl_options: ClassVar[set[str]] = {"REGISTER"}
 
     def execute(self, context):
         """Execute refresh colliders."""
@@ -261,12 +246,12 @@ class PANTHOR_OT_refresh_colliders(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_remove_collider(Operator):
+class PanthorOTRemoveCollider(Operator):
     """Remove the selected collider and delete the object."""
 
-    bl_idname = "panthor.remove_collider"
-    bl_label = "Remove Collider"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.remove_collider"
+    bl_label: ClassVar[str] = "Remove Collider"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute remove collider."""
@@ -294,9 +279,9 @@ class PANTHOR_OT_remove_collider(Operator):
 
 def register():
     """Register collider operators."""
-    bpy.utils.register_class(PANTHOR_OT_fix_colliders)
-    bpy.utils.register_class(PANTHOR_OT_add_collider)
-    bpy.utils.register_class(PANTHOR_OT_validate_colliders)
+    bpy.utils.register_class(PanthorOTFixColliders)
+    bpy.utils.register_class(PanthorOTAddCollider)
+    bpy.utils.register_class(PanthorOTValidateColliders)
     bpy.utils.register_class(PanthorColliderItem)
     bpy.types.Scene.panthor_colliders = CollectionProperty(type=PanthorColliderItem)
     bpy.types.Scene.panthor_collider_index = IntProperty()
@@ -306,18 +291,18 @@ def register():
         default=False,
         update=_update_hide_colliders,
     )
-    bpy.utils.register_class(PANTHOR_OT_refresh_colliders)
-    bpy.utils.register_class(PANTHOR_OT_remove_collider)
+    bpy.utils.register_class(PanthorOTRefreshColliders)
+    bpy.utils.register_class(PanthorOTRemoveCollider)
 
 
 def unregister():
     """Unregister collider operators."""
-    bpy.utils.unregister_class(PANTHOR_OT_remove_collider)
-    bpy.utils.unregister_class(PANTHOR_OT_refresh_colliders)
+    bpy.utils.unregister_class(PanthorOTRemoveCollider)
+    bpy.utils.unregister_class(PanthorOTRefreshColliders)
     del bpy.types.Scene.panthor_hide_colliders
     del bpy.types.Scene.panthor_collider_index
     del bpy.types.Scene.panthor_colliders
     bpy.utils.unregister_class(PanthorColliderItem)
-    bpy.utils.unregister_class(PANTHOR_OT_validate_colliders)
-    bpy.utils.unregister_class(PANTHOR_OT_add_collider)
-    bpy.utils.unregister_class(PANTHOR_OT_fix_colliders)
+    bpy.utils.unregister_class(PanthorOTValidateColliders)
+    bpy.utils.unregister_class(PanthorOTAddCollider)
+    bpy.utils.unregister_class(PanthorOTFixColliders)

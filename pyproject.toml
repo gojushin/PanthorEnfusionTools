@@ -7,13 +7,22 @@ select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
     "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-    "D",  # pydocstyle
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "D",   # pydocstyle
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "RUF", # ruff-specific rules
+    "ERA", # eradicate (commented out code)
+    "T20", # flake8-print
+    "SIM", # flake8-simplify
 ]
 ignore = [
     "D100",  # missing docstring in public module
     "D104",  # missing docstring in public package
+    "D203",  # one-blank-line-before-class
+    "D212",  # multi-line-summary-first-line
+    "N999",  # invalid module name
 ]
 

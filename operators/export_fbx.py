@@ -1,6 +1,7 @@
 """FBX Export Operators."""
 
 import os
+from typing import ClassVar
 
 import bpy
 from bpy.props import StringProperty
@@ -15,12 +16,12 @@ from ..utils.constants import (
 )
 
 
-class PANTHOR_OT_export_fbx(Operator):
+class PanthorOTExportFbx(Operator):
     """Export scene as FBX with textures for Enfusion."""
 
-    bl_idname = "panthor.export_fbx"
-    bl_label = "Export FBX for Enfusion"
-    bl_options = {"REGISTER"}
+    bl_idname: ClassVar[str] = "panthor.export_fbx"
+    bl_label: ClassVar[str] = "Export FBX for Enfusion"
+    bl_options: ClassVar[set[str]] = {"REGISTER"}
 
     directory: StringProperty(subtype="DIR_PATH")
 
@@ -93,12 +94,12 @@ class PANTHOR_OT_export_fbx(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_export_fbx_ebt(Operator):
+class PanthorOTExportFbxEbt(Operator):
     """Export scene using the Arma Reforger EBT export function."""
 
-    bl_idname = "panthor.export_fbx_ebt"
-    bl_label = "Export using EBT"
-    bl_options = {"REGISTER"}
+    bl_idname: ClassVar[str] = "panthor.export_fbx_ebt"
+    bl_label: ClassVar[str] = "Export using EBT"
+    bl_options: ClassVar[set[str]] = {"REGISTER"}
 
     @classmethod
     def poll(cls, context):
@@ -130,11 +131,11 @@ class PANTHOR_OT_export_fbx_ebt(Operator):
 
 def register():
     """Register export operators."""
-    bpy.utils.register_class(PANTHOR_OT_export_fbx)
-    bpy.utils.register_class(PANTHOR_OT_export_fbx_ebt)
+    bpy.utils.register_class(PanthorOTExportFbx)
+    bpy.utils.register_class(PanthorOTExportFbxEbt)
 
 
 def unregister():
     """Unregister export operators."""
-    bpy.utils.unregister_class(PANTHOR_OT_export_fbx_ebt)
-    bpy.utils.unregister_class(PANTHOR_OT_export_fbx)
+    bpy.utils.unregister_class(PanthorOTExportFbxEbt)
+    bpy.utils.unregister_class(PanthorOTExportFbx)

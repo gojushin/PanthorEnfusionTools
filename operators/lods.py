@@ -1,14 +1,16 @@
 """LOD Management Operators."""
 
+from typing import ClassVar
+
 import bpy
 from bpy.props import CollectionProperty, FloatProperty, PointerProperty
-from bpy.types import Operator, PropertyGroup
+from bpy.types import Object, Operator, PropertyGroup
 
 # LOD prefix format: "LOD{n}_"
 _LOD_PREFIX = "LOD"
 
 
-def get_base_name(obj):
+def get_base_name(obj: Object) -> str:
     """Get the base name without LOD prefix (e.g. 'LOD0_MyMesh' → 'MyMesh')."""
     name = obj.name
     if name.startswith(_LOD_PREFIX) and "_" in name[len(_LOD_PREFIX) :]:
@@ -21,7 +23,8 @@ def get_base_name(obj):
 
 
 def get_lod_objects(base_name):
-    """Return all LOD objects for a base name, sorted by LOD number.
+    """
+    Return all LOD objects for a base name, sorted by LOD number.
 
     Naming convention: ``LOD{n}_{base_name}``
     """
@@ -84,12 +87,12 @@ def _refresh_lod_list(context):
 # ---------------------------------------------------------------------------
 
 
-class PANTHOR_OT_add_lod(Operator):
+class PanthorOTAddLOD(Operator):
     """Add a new LOD using LOD0 as the base."""
 
-    bl_idname = "panthor.add_lod"
-    bl_label = "Add LOD"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.add_lod"
+    bl_label: ClassVar[str] = "Add LOD"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(cls, context):
@@ -133,12 +136,12 @@ class PANTHOR_OT_add_lod(Operator):
         return {"FINISHED"}
 
 
-class PANTHOR_OT_remove_lod(Operator):
+class PanthorOTRemoveLOD(Operator):
     """Remove the selected LOD from the list and delete the object."""
 
-    bl_idname = "panthor.remove_lod"
-    bl_label = "Remove LOD"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_idname: ClassVar[str] = "panthor.remove_lod"
+    bl_label: ClassVar[str] = "Remove LOD"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         """Execute remove LOD."""
@@ -199,12 +202,12 @@ class PanthorLODItem(PropertyGroup):
     calc_ratio: FloatProperty()
 
 
-class PANTHOR_OT_refresh_lods(Operator):
+class PanthorOTRefreshLODs(Operator):
     """Refresh the LOD list for the active object."""
 
-    bl_idname = "panthor.refresh_lods"
-    bl_label = "Refresh LOD List"
-    bl_options = {"REGISTER"}
+    bl_idname: ClassVar[str] = "panthor.refresh_lods"
+    bl_label: ClassVar[str] = "Refresh LOD List"
+    bl_options: ClassVar[set[str]] = {"REGISTER"}
 
     def execute(self, context):
         """Execute refresh."""
@@ -251,16 +254,16 @@ def register():
         update=_update_hide_lods,
     )
 
-    bpy.utils.register_class(PANTHOR_OT_add_lod)
-    bpy.utils.register_class(PANTHOR_OT_remove_lod)
-    bpy.utils.register_class(PANTHOR_OT_refresh_lods)
+    bpy.utils.register_class(PanthorOTAddLOD)
+    bpy.utils.register_class(PanthorOTRemoveLOD)
+    bpy.utils.register_class(PanthorOTRefreshLODs)
 
 
 def unregister():
     """Unregister LOD operators."""
-    bpy.utils.unregister_class(PANTHOR_OT_refresh_lods)
-    bpy.utils.unregister_class(PANTHOR_OT_remove_lod)
-    bpy.utils.unregister_class(PANTHOR_OT_add_lod)
+    bpy.utils.unregister_class(PanthorOTRefreshLODs)
+    bpy.utils.unregister_class(PanthorOTRemoveLOD)
+    bpy.utils.unregister_class(PanthorOTAddLOD)
 
     del bpy.types.Scene.panthor_hide_lods
     del bpy.types.Scene.panthor_lods

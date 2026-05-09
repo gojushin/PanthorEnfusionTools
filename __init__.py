@@ -1,4 +1,5 @@
-"""Panthor Enfusion Tools Addon.
+"""
+Panthor Enfusion Tools Addon.
 
 Toolbox for converting FBX and Textures to Enfusion engine standards.
 """
