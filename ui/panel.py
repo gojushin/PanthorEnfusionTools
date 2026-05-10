@@ -100,16 +100,8 @@ class PanthorPTMainPanel(Panel):
 
         box.prop(context.scene, "panthor_texture_preset", text="Preset")
 
-        # Check if there are any embedded textures
-        has_embedded = any(
-            img.has_data for img in bpy.data.images if img.type != "RENDER_RESULT" and img.name != "Render Result"
-        )
-
         row = box.row(align=True)
-        if has_embedded:
-            row.operator("panthor.remap_embedded_textures", text="Remap Embedded Textures")
-        else:
-            row.operator("panthor.import_textures", text="Import & Remap Textures")
+        row.operator("panthor.import_textures", text="Import & Remap Textures")
 
         row = box.row()
         row.template_list(

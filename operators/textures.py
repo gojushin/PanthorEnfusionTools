@@ -12,6 +12,50 @@ from ..utils.texture_presets import TEXTURE_PRESETS
 from ..utils.texture_processing import generate_texture
 
 
+class PanthorTextureImportItem(PropertyGroup):
+    """Property group for a texture import item."""
+
+    filename: StringProperty(name="Texture")
+    filepath: StringProperty()
+
+    texture_type: EnumProperty(
+        name="Texture Type",
+        items=[
+            ("BASECOLOR", "BASECOLOR", "Base color/Albedo"),
+            ("NORMAL", "NORMAL", "Normal Map"),
+            ("ORM", "ORM", "Occlusion Roughness Metallic"),
+            ("ROUGHNESS", "ROUGHNESS", "Roughness Map"),
+            ("METALNESS", "METALNESS", "Metalness Map"),
+            ("OPACITY", "OPACITY", "Opacity/Alpha Map"),
+            ("MASK", "MASK", "Mask Map"),
+            ("AO", "AO", "Ambient Occlusion"),
+        ],
+    )
+
+    def get_source_preset_items(self, context):
+        """Get preset items for the source dropdown."""
+        from ..utils.texture_presets import get_preset_items
+
+        return get_preset_items(self, context)
+
+    source_preset: EnumProperty(
+        name="Source",
+        items=get_source_preset_items,
+    )
+
+    def get_material_items(self, context):
+        """Get material items for the target dropdown."""
+        items = [("NONE", "None", "Do not assign")]
+        for mat in bpy.data.materials:
+            items.append((mat.name, mat.name, f"Assign to {mat.name}"))
+        return items
+
+    target_material: EnumProperty(
+        name="Target Material",
+        items=get_material_items,
+    )
+
+
 class PanthorTextureItem(PropertyGroup):
     """Property group for a texture item."""
 
@@ -28,80 +72,23 @@ def _refresh_texture_list(context):
             item.img = img
 
 
-def _get_image_by_suffix(images_list: list[Image], material_name: str, suffixes: list[str]) -> Image | None:
-    """Find an image in a list that matches the material name and suffix."""
-    mat_lower = material_name.lower()
+def process_material_textures_explicit(material: Material, mapping_items: list[PanthorTextureImportItem]):
+    """Generate textures based on explicit mapping and set up the material."""
+    if not mapping_items:
+        return
 
-    for img in images_list:
-        name_lower = img.name.lower()
-
-        # Strip Blender's .001 suffixes or file extensions like .png
-        if "." in name_lower:
-            name_lower = name_lower.rsplit(".", 1)[0]
-
-        # Match material name exactly or without underscores
-        if (mat_lower in name_lower or mat_lower.replace("_", "") in name_lower.replace("_", "")) and any(
-            name_lower.endswith(s) or f"_{s}" in name_lower for s in suffixes
-        ):
-            return img
-    return None
-
-
-def _get_image_from_bsdf_input(bsdf: bpy.types.ShaderNodeBsdfPrincipled, input_name: str) -> Image | None:
-    """Get an image from a BSDF input, handling Normal Maps."""
-    if input_name not in bsdf.inputs:
-        return None
-
-    for link in bsdf.inputs[input_name].links:
-        from_node = link.from_node
-        if from_node.type == "TEX_IMAGE":
-            return from_node.image
-        if from_node.type == "NORMAL_MAP":
-            for n_link in from_node.inputs["Color"].links:
-                if n_link.from_node.type == "TEX_IMAGE":
-                    return n_link.from_node.image
-    return None
-
-
-def _get_images_from_nodes(material: Material) -> dict[str, Image]:
-    """Extract images currently linked to the material's Principled BSDF."""
-    images = {}
-    if not material.use_nodes:
-        return images
-
-    bsdf = next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
-    if not bsdf:
-        return images
-
-    # Map input names to their texture keys
-    mapping = {
-        "Base Color": "BASECOLOR",
-        "Normal": "NORMAL",
-        "Metallic": "METALNESS",
-        "Roughness": "ROUGHNESS",
-    }
-
-    for input_name, tex_key in mapping.items():
-        img = _get_image_from_bsdf_input(bsdf, input_name)
-        if img:
-            images[tex_key] = img
-
-    return images
-
-
-def process_material_textures(material, images_list, preset_key):
-    """Generate textures based on preset and set up the material."""
+    # Use the source preset from the first item as the master preset for this material
+    preset_key = mapping_items[0].source_preset
     preset = TEXTURE_PRESETS.get(preset_key)
     if not preset:
         return
 
-    # First, try to pull exactly what Blender's FBX importer already wired up (for embedded textures)
-    available_images = _get_images_from_nodes(material)
-
-    # Fill in any missing maps by intelligently string-matching against the folder/images list
-    for tex_type, suffixes in TEXTURE_SUFFIXES.items():
-        if tex_type not in available_images or available_images[tex_type] is None:
-            available_images[tex_type] = _get_image_by_suffix(images_list, material.name, suffixes)
+    # Prepare available images for the generator
+    available_images = {}
+    for item in mapping_items:
+        # Load the image if not already loaded
+        img = bpy.data.images.load(item.filepath, check_existing=True)
+        available_images[item.texture_type] = img
 
     generated_textures = {}
     for map_config in preset["maps"]:
@@ -171,80 +158,100 @@ def process_material_textures(material, images_list, preset_key):
         links.new(tex_a.outputs[0], bsdf.inputs["Alpha"])
         # Set blend mode to Alpha Clip or Blend if opacity is present
         material.blend_method = "CLIP"
-        material.shadow_method = "CLIP"
-
-
-class PanthorOTRemapEmbeddedTextures(Operator):
-    """Remap embedded textures according to the selected preset."""
-
-    bl_idname: ClassVar[str] = "panthor.remap_embedded_textures"
-    bl_label: ClassVar[str] = "Remap Embedded Textures"
-    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        """Execute."""
-        preset = context.scene.panthor_texture_preset
-        if preset == "NONE":
-            self.report({"WARNING"}, "Texture preset is set to NONE.")
-            return {"CANCELLED"}
-
-        images = [img for img in bpy.data.images if img.has_data]
-        processed_materials = set()
-
-        for obj in context.scene.objects:
-            if obj.type == "MESH":
-                for slot in obj.material_slots:
-                    if slot.material and slot.material not in processed_materials:
-                        processed_materials.add(slot.material)
-                        process_material_textures(slot.material, images, preset)
-
-        _refresh_texture_list(context)
-        self.report({"INFO"}, "Embedded textures remapped.")
-        return {"FINISHED"}
 
 
 class PanthorOTImportTextures(Operator):
-    """Import textures from a directory and remap them."""
+    """Import textures from a directory with a configuration dialogue."""
 
     bl_idname: ClassVar[str] = "panthor.import_textures"
     bl_label: ClassVar[str] = "Import & Remap Textures"
     bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
 
     directory: StringProperty(subtype="DIR_PATH")
+    is_configured: bpy.props.BoolProperty(default=False, options={"SKIP_SAVE"})
 
     def invoke(self, context, event):
-        """Invoke."""
+        """Invoke the folder selector."""
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
-    def execute(self, context):
-        """Execute."""
-        preset = context.scene.panthor_texture_preset
-        if preset == "NONE":
-            self.report({"WARNING"}, "Texture preset is set to NONE.")
-            return {"CANCELLED"}
+    def draw(self, context):
+        """Draw the configuration dialogue."""
+        layout = self.layout
+        layout.label(text="Configure Texture Mapping")
 
+        # Table-like header
+        row = layout.row()
+        row.label(text="Texture")
+        row.label(text="Texture Type")
+        row.label(text="Source")
+        row.label(text="Target Material")
+
+        for item in context.scene.panthor_texture_import_list:
+            row = layout.row()
+            row.label(text=item.filename)
+            row.prop(item, "texture_type", text="")
+            row.prop(item, "source_preset", text="")
+            row.prop(item, "target_material", text="")
+
+    def execute(self, context):
+        """Execute the remapping or show dialogue."""
         if not self.directory:
             return {"CANCELLED"}
 
-        # Load all images in the directory
-        loaded_images = []
-        for file in os.listdir(self.directory):
-            if file.lower().endswith((".png", ".jpg", ".jpeg", ".tga", ".tif", ".tiff")):
-                filepath = os.path.join(self.directory, file)
-                img = bpy.data.images.load(filepath, check_existing=True)
-                loaded_images.append(img)
+        if not self.is_configured:
+            # Step 1: Scan directory and populate import list
+            context.scene.panthor_texture_import_list.clear()
 
-        processed_materials = set()
+            # Detect materials in scene
+            mats = [m.name for m in bpy.data.materials]
 
-        for obj in context.scene.objects:
-            if obj.type == "MESH":
-                for slot in obj.material_slots:
-                    if slot.material and slot.material not in processed_materials:
-                        processed_materials.add(slot.material)
-                        process_material_textures(slot.material, loaded_images, preset)
+            for file in os.listdir(self.directory):
+                if file.lower().endswith((".png", ".jpg", ".jpeg", ".tga", ".tif", ".tiff")):
+                    item = context.scene.panthor_texture_import_list.add()
+                    item.filename = file
+                    item.filepath = os.path.join(self.directory, file)
+
+                    # Best guess detection
+                    name_lower = file.lower()
+                    
+                    # 1. Detect Type
+                    for tex_type, suffixes in TEXTURE_SUFFIXES.items():
+                        if any(name_lower.endswith(s + os.path.splitext(name_lower)[1]) or f"_{s}" in name_lower for s in suffixes):
+                            item.texture_type = tex_type
+                            break
+                    
+                    # 2. Detect Material
+                    best_mat = "NONE"
+                    for mat_name in mats:
+                        if mat_name.lower() in name_lower:
+                            best_mat = mat_name
+                            break
+                    item.target_material = best_mat
+
+                    # 3. Default Source
+                    item.source_preset = context.scene.panthor_texture_preset
+
+            self.is_configured = True
+            return context.window_manager.invoke_props_dialog(self, width=800)
+
+        # Step 2: Perform remapping based on configured items
+        mapping_by_material = {}
+        for item in context.scene.panthor_texture_import_list:
+            if item.target_material == "NONE":
+                continue
+            
+            if item.target_material not in mapping_by_material:
+                mapping_by_material[item.target_material] = []
+            mapping_by_material[item.target_material].append(item)
+
+        for mat_name, items in mapping_by_material.items():
+            mat = bpy.data.materials.get(mat_name)
+            if mat:
+                process_material_textures_explicit(mat, items)
 
         _refresh_texture_list(context)
+        self.is_configured = False
         self.report({"INFO"}, "Textures imported and remapped.")
         return {"FINISHED"}
 
@@ -264,16 +271,17 @@ class PanthorOTRefreshTextures(Operator):
 
 def register():
     """Register texture operators."""
-    from ..utils.texture_presets import get_preset_items
-
+    bpy.utils.register_class(PanthorTextureImportItem)
     bpy.utils.register_class(PanthorTextureItem)
-    bpy.utils.register_class(PanthorOTRemapEmbeddedTextures)
     bpy.utils.register_class(PanthorOTImportTextures)
     bpy.utils.register_class(PanthorOTRefreshTextures)
 
     bpy.types.Scene.panthor_textures = CollectionProperty(type=PanthorTextureItem)
     bpy.types.Scene.panthor_texture_index = IntProperty()
+    
+    bpy.types.Scene.panthor_texture_import_list = CollectionProperty(type=PanthorTextureImportItem)
 
+    from ..utils.texture_presets import get_preset_items
     bpy.types.Scene.panthor_texture_preset = EnumProperty(
         name="Texture Preset",
         items=get_preset_items,
@@ -283,10 +291,11 @@ def register():
 def unregister():
     """Unregister texture operators."""
     del bpy.types.Scene.panthor_texture_preset
+    del bpy.types.Scene.panthor_texture_import_list
     del bpy.types.Scene.panthor_texture_index
     del bpy.types.Scene.panthor_textures
 
     bpy.utils.unregister_class(PanthorOTRefreshTextures)
     bpy.utils.unregister_class(PanthorOTImportTextures)
-    bpy.utils.unregister_class(PanthorOTRemapEmbeddedTextures)
     bpy.utils.unregister_class(PanthorTextureItem)
+    bpy.utils.unregister_class(PanthorTextureImportItem)
