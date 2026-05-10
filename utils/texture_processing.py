@@ -53,6 +53,11 @@ def generate_texture(
     _apply_post_actions(pixels, config)
 
     # 5. Create and save to Blender
+    # Remove existing image if it exists to avoid .001 name collision
+    existing = bpy.data.images.get(name)
+    if existing:
+        bpy.data.images.remove(existing)
+
     img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
     _set_image_pixels(img, pixels)
     img.pack()
@@ -135,3 +140,17 @@ def _apply_post_actions(pixels: np.ndarray, config: dict):
     for i, color_name in enumerate(channels):
         if actions.get(f"invert_{color_name}_channel"):
             pixels[:, :, i] = 1.0 - pixels[:, :, i]
+
+
+def is_image_color(image: bpy.types.Image, color: tuple[float, ...], tolerance: float = 0.001) -> bool:
+    """Check if an image consists entirely of a single color."""
+    if not image or not image.has_data:
+        return True
+
+    pixels = np.empty(image.size[0] * image.size[1] * image.channels, dtype=np.float32)
+    image.pixels.foreach_get(pixels)
+    pixels = pixels.reshape((-1, image.channels))
+
+    # Compare against target color for existing channels
+    target = np.array(color[: image.channels], dtype=np.float32)
+    return np.all(np.abs(pixels - target) < tolerance)

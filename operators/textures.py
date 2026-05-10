@@ -77,6 +77,8 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
     if not mapping_items:
         return
 
+    from ..utils.texture_processing import generate_texture, is_image_color
+
     # Use the source preset from the first item as the master preset for this material
     preset_key = mapping_items[0].source_preset
     preset = TEXTURE_PRESETS.get(preset_key)
@@ -92,19 +94,32 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
 
     generated_textures = {}
     for map_config in preset["maps"]:
-        tex_name = f"PTR_{material.name}_{map_config['name']}"
+        map_name = map_config["name"]
+        tex_name = f"PTR_{material.name}_{map_name}"
 
         # Determine fallback color based on typical use
-        fallback = (0.5, 0.5, 0.0, 1.0) if map_config["name"] == "NMO" else (1.0, 1.0, 1.0, 1.0)
+        # BCR/A fallback to white (1,1,1,1)
+        # NMO fallbacks to flat normal/no metal/no AO (0.5, 0.5, 0, 1)
+        fallback = (0.5, 0.5, 0.0, 1.0) if map_name == "NMO" else (1.0, 1.0, 1.0, 1.0)
 
+        # Generate the texture
         img = generate_texture(tex_name, map_config, available_images, fallback_color=fallback)
-        generated_textures[map_config["name"]] = img
+
+        # Rule: If the generated texture is entirely the fallback color, do not create/assign it.
+        if is_image_color(img, fallback):
+            bpy.data.images.remove(img)
+            continue
+
+        generated_textures[map_name] = img
 
     # Set up material nodes
     material.use_nodes = True
     nodes = material.node_tree.nodes
     links = material.node_tree.links
     nodes.clear()
+
+    # Reset blend mode to OPAQUE by default, will be changed if Alpha is present
+    material.blend_method = "OPAQUE"
 
     bsdf = nodes.new("ShaderNodeBsdfPrincipled")
     bsdf.location = (0, 0)
