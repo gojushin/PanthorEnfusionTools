@@ -1,9 +1,6 @@
-"""Collider Setup and Validation Operators."""
-
-from typing import ClassVar
-
-import bpy
+import bmesh
 import mathutils
+import bpy
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty
 from bpy.types import Context, Object, Operator, PropertyGroup
 
@@ -17,10 +14,111 @@ from ..utils.constants import (
 )
 
 
+def _rebuild_collider_geometry(obj: Object):
+    """Rebuild collider geometry based on its prefix and vertex positions."""
+    if obj.type != "MESH":
+        return
+
+    # 1. Get vertex positions in world space
+    mw = obj.matrix_world
+    verts_world = [mw @ v.co for v in obj.data.vertices]
+    if not verts_world:
+        return
+
+    # Calculate basic bounding info
+    xs = [v.x for v in verts_world]
+    ys = [v.y for v in verts_world]
+    zs = [v.z for v in verts_world]
+    min_v = mathutils.Vector((min(xs), min(ys), min(zs)))
+    max_v = mathutils.Vector((max(xs), max(ys), max(zs)))
+    center = (min_v + max_v) / 2.0
+    dims = max_v - min_v
+
+    name = obj.name
+    prefix = ""
+    for p in (
+        COLLIDER_PREFIX_BOX,
+        COLLIDER_PREFIX_CONVEX,
+        COLLIDER_PREFIX_SPHERE,
+        COLLIDER_PREFIX_CAPSULE,
+        COLLIDER_PREFIX_CYLINDER,
+    ):
+        if name.startswith(p):
+            prefix = p
+            break
+
+    if not prefix:
+        return
+
+    # UCX to UBX conversion check
+    if prefix == COLLIDER_PREFIX_CONVEX and len(obj.data.vertices) == 8:
+        # Simple heuristic: if it has 8 verts, assume it's a box
+        prefix = COLLIDER_PREFIX_BOX
+        obj.name = name.replace(COLLIDER_PREFIX_CONVEX, COLLIDER_PREFIX_BOX, 1)
+
+    # Create new mesh data
+    bm = bmesh.new()
+
+    if prefix == COLLIDER_PREFIX_BOX:
+        bmesh.ops.create_cube(bm, size=1.0)
+        # Scale to dimensions
+        for v in bm.verts:
+            v.co.x *= dims.x
+            v.co.y *= dims.y
+            v.co.z *= dims.z
+    elif prefix == COLLIDER_PREFIX_SPHERE:
+        # Sphere: uniform scale, max dimension used for radius
+        radius = max(dims.x, dims.y, dims.z) / 2.0
+        bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=16, radius=radius)
+    elif prefix == COLLIDER_PREFIX_CYLINDER:
+        # Cylinder: XY must be same scale
+        radius = max(dims.x, dims.y) / 2.0
+        bmesh.ops.create_cone(bm, segments=16, cap_ends=True, cap_tris=False, radius1=radius, radius2=radius, depth=dims.z)
+    elif prefix == COLLIDER_PREFIX_CAPSULE:
+        # Capsule: XY uniform, caps unscaled on Z
+        radius = max(dims.x, dims.y) / 2.0
+        height = dims.z
+        bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=16, radius=radius)
+        # Stretch sphere to capsule
+        if height > radius * 2:
+            move_amount = (height - radius * 2) / 2
+            for v in bm.verts:
+                if v.co.z > 0.001:
+                    v.co.z += move_amount
+                elif v.co.z < -0.001:
+                    v.co.z -= move_amount
+    elif prefix == COLLIDER_PREFIX_CONVEX:
+        # Convex: Rebuild hull from original vertices
+        for v_co in verts_world:
+            bm.verts.new(v_co - center) # Localize to center
+        bmesh.ops.convex_hull(bm, input=bm.verts)
+
+    # Finalize mesh
+    bm.to_mesh(obj.data)
+    bm.free()
+
+    # Apply translation and reset transforms
+    # Move geometry to its world position but keep object at origin (Enfusion requirement)
+    for v in obj.data.vertices:
+        v.co += center
+    
+    obj.location = (0, 0, 0)
+    obj.rotation_euler = (0, 0, 0)
+    obj.scale = (1, 1, 1)
+    obj.matrix_world = mathutils.Matrix.Identity(4)
+    obj.data.update()
+
+
 def rename_and_enumerate_colliders():
     """Rename boxes from UCX to UBX and enumerate suffixes."""
     colliders = []
-    prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
+    prefixes = (
+        COLLIDER_PREFIX_BOX,
+        COLLIDER_PREFIX_CONVEX,
+        COLLIDER_PREFIX_SPHERE,
+        COLLIDER_PREFIX_CAPSULE,
+        COLLIDER_PREFIX_CYLINDER,
+    )
 
     for obj in bpy.context.scene.objects:
         if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
@@ -30,10 +128,6 @@ def rename_and_enumerate_colliders():
     base_counts = {}
 
     for obj in colliders:
-        # Check if it's a box currently named UCX
-        if obj.name.startswith("UCX_") and len(obj.data.vertices) == 8:
-            obj.name = obj.name.replace("UCX_", "UBX_", 1)
-
         # Parse base name
         parts = obj.name.split("_")
         if len(parts) >= 2:
@@ -64,33 +158,8 @@ def _get_bounding_box_info(obj: Object) -> tuple[mathutils.Vector, mathutils.Vec
     return center, dims
 
 
-def _add_capsule(radius: float, height: float):
-    """Create a capsule mesh by stretching a UV Sphere."""
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=radius)
-    obj = bpy.context.active_object
-
-    # If height is greater than diameter, stretch it
-    if height > radius * 2:
-        move_amount = (height - radius * 2) / 2
-        import bmesh
-
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-
-        for v in bm.verts:
-            if v.co.z > 0.001:
-                v.co.z += move_amount
-            elif v.co.z < -0.001:
-                v.co.z -= move_amount
-
-        bm.to_mesh(obj.data)
-        bm.free()
-
-    return obj
-
-
 class PanthorOTFixColliders(Operator):
-    """Rename Box colliders and enumerate all colliders."""
+    """Rebuild and clean up collider geometry."""
 
     bl_idname: ClassVar[str] = "panthor.fix_colliders"
     bl_label: ClassVar[str] = "Fix Colliders"
@@ -98,8 +167,21 @@ class PanthorOTFixColliders(Operator):
 
     def execute(self, context):
         """Execute fix colliders."""
+        prefixes = (
+            COLLIDER_PREFIX_BOX,
+            COLLIDER_PREFIX_CONVEX,
+            COLLIDER_PREFIX_SPHERE,
+            COLLIDER_PREFIX_CAPSULE,
+            COLLIDER_PREFIX_CYLINDER,
+        )
+        
+        targets = [obj for obj in context.scene.objects if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes)]
+        
+        for obj in targets:
+            _rebuild_collider_geometry(obj)
+            
         rename_and_enumerate_colliders()
-        self.report({"INFO"}, "Colliders fixed.")
+        self.report({"INFO"}, "Colliders rebuilt and enumerated.")
         return {"FINISHED"}
 
 
@@ -138,55 +220,43 @@ class PanthorOTAddCollider(Operator):
 
         # Get target bounding box
         center, dims = _get_bounding_box_info(active)
-        dx, dy, dz = dims.x, dims.y, dims.z
+        
+        # Create a temp object and use our fix logic to build it
+        mesh = bpy.data.meshes.new("TempCollider")
+        new_obj = bpy.data.objects.new("TempCollider", mesh)
+        context.collection.objects.link(new_obj)
+        
+        # Add a dummy vertex at the corners to define the bounds for the rebuilder
+        bm = bmesh.new()
+        half = dims / 2
+        for x in (-half.x, half.x):
+            for y in (-half.y, half.y):
+                for z in (-half.z, half.z):
+                    bm.verts.new(center + mathutils.Vector((x, y, z)))
+        bm.to_mesh(mesh)
+        bm.free()
 
-        # Create the primitive
-        if self.collider_type == "BOX":
-            bpy.ops.mesh.primitive_cube_add()
-            new_obj = context.active_object
-            new_obj.scale = (dx / 2, dy / 2, dz / 2)
-            prefix = COLLIDER_PREFIX_BOX
-        elif self.collider_type == "CONVEX":
-            bpy.ops.mesh.primitive_cube_add()
-            new_obj = context.active_object
-            new_obj.scale = (dx / 2, dy / 2, dz / 2)
-            prefix = COLLIDER_PREFIX_CONVEX
-        elif self.collider_type == "SPHERE":
-            radius = max(dx, dy, dz) / 2
-            bpy.ops.mesh.primitive_uv_sphere_add(radius=radius)
-            new_obj = context.active_object
-            prefix = COLLIDER_PREFIX_SPHERE
-        elif self.collider_type == "CAPSULE":
-            radius = max(dx, dy) / 2
-            new_obj = _add_capsule(radius, dz)
-            prefix = COLLIDER_PREFIX_CAPSULE
-        elif self.collider_type == "CYLINDER":
-            radius = max(dx, dy) / 2
-            bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=dz)
-            new_obj = context.active_object
-            prefix = COLLIDER_PREFIX_CYLINDER
-        else:
-            return {"CANCELLED"}
-
-        new_obj.location = center
+        prefix = {
+            "BOX": COLLIDER_PREFIX_BOX,
+            "CONVEX": COLLIDER_PREFIX_CONVEX,
+            "SPHERE": COLLIDER_PREFIX_SPHERE,
+            "CAPSULE": COLLIDER_PREFIX_CAPSULE,
+            "CYLINDER": COLLIDER_PREFIX_CYLINDER,
+        }[self.collider_type]
+        
         new_obj.name = f"{prefix}{base_name}"
-
-        # Apply rotation and scale, then set origin to geometry
-        bpy.context.view_layer.objects.active = new_obj
-        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-        bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
+        _rebuild_collider_geometry(new_obj)
 
         # Link to the active object's collection
         active_cols = active.users_collection
         if active_cols:
             for c in new_obj.users_collection:
-                c.objects.unlink(new_obj)
-            active_cols[0].objects.link(new_obj)
+                if c != active_cols[0]:
+                    c.objects.unlink(new_obj)
+            if new_obj.name not in active_cols[0].objects:
+                active_cols[0].objects.link(new_obj)
 
-        # Enumerate to ensure correct suffix
         rename_and_enumerate_colliders()
-
-        # Refresh UI list
         _refresh_collider_list(context)
 
         return {"FINISHED"}
@@ -201,24 +271,67 @@ class PanthorOTValidateColliders(Operator):
 
     def execute(self, context):
         """Validate all colliders."""
-        prefixes = ("UBX_", "UCX_", "USP_", "UCS_", "UCL_")
+        prefixes = (
+            COLLIDER_PREFIX_BOX,
+            COLLIDER_PREFIX_CONVEX,
+            COLLIDER_PREFIX_SPHERE,
+            COLLIDER_PREFIX_CAPSULE,
+            COLLIDER_PREFIX_CYLINDER,
+        )
         errors = []
 
         for obj in bpy.context.scene.objects:
             if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
-                # Check origin
-                if tuple(obj.location) != (0.0, 0.0, 0.0):
-                    errors.append(f"{obj.name}: Origin not at center.")
-
-                # Check rotation and scale
-                if tuple(obj.scale) != (1.0, 1.0, 1.0):
+                # 1. Check Transform
+                if tuple(round(v, 4) for v in obj.location) != (0.0, 0.0, 0.0):
+                    errors.append(f"{obj.name}: Origin not at (0,0,0).")
+                if tuple(round(v, 4) for v in obj.scale) != (1.0, 1.0, 1.0):
                     errors.append(f"{obj.name}: Scale not applied.")
-                if tuple(obj.rotation_euler) != (0.0, 0.0, 0.0):
+                if tuple(round(v, 4) for v in obj.rotation_euler) != (0.0, 0.0, 0.0):
                     errors.append(f"{obj.name}: Rotation not applied.")
 
-                # Check vertices
+                # 2. Check Vertex Count
                 if len(obj.data.vertices) > MAX_VERTS_COLLIDER:
                     errors.append(f"{obj.name}: Vertices exceed {MAX_VERTS_COLLIDER}.")
+
+                # 3. Check Geometry Specifics
+                bm = bmesh.new()
+                bm.from_mesh(obj.data)
+                
+                # UCX Specific checks
+                if obj.name.startswith(COLLIDER_PREFIX_CONVEX):
+                    # Manifold
+                    non_manifold = [e for e in bm.edges if not e.is_manifold]
+                    if non_manifold:
+                        errors.append(f"{obj.name}: Contains {len(non_manifold)} non-manifold edges.")
+                    
+                    # Planar and Convex faces
+                    for f in bm.faces:
+                        if not f.is_planar:
+                            errors.append(f"{obj.name}: Non-planar face detected.")
+                            break
+                        if not f.is_convex:
+                            errors.append(f"{obj.name}: Non-convex face detected.")
+                            break
+                
+                # Primitive Specific checks (Simple dimension checks)
+                verts_local = [v.co for v in bm.verts]
+                if verts_local:
+                    xs = [v.x for v in verts_local]
+                    ys = [v.y for v in verts_local]
+                    zs = [v.z for v in verts_local]
+                    dx = max(xs) - min(xs)
+                    dy = max(ys) - min(ys)
+                    dz = max(zs) - min(zs)
+                    
+                    if obj.name.startswith(COLLIDER_PREFIX_SPHERE):
+                        if not (round(dx, 3) == round(dy, 3) == round(dz, 3)):
+                            errors.append(f"{obj.name}: Sphere must have uniform dimensions (current: {dx:.2f}, {dy:.2f}, {dz:.2f}).")
+                    elif obj.name.startswith(COLLIDER_PREFIX_CYLINDER) or obj.name.startswith(COLLIDER_PREFIX_CAPSULE):
+                        if round(dx, 3) != round(dy, 3):
+                            errors.append(f"{obj.name}: XY dimensions must be equal (current: X={dx:.2f}, Y={dy:.2f}).")
+
+                bm.free()
 
         if errors:
             for e in errors:
