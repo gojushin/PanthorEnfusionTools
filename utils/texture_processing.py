@@ -39,9 +39,12 @@ def generate_texture(
     This function compiles a new texture by plucking specific channels
     from various input textures and packing them together.
     """
-    # 1. Determine dimensions and allocate blank canvas
-    width, height = _determine_dimensions(config, available_images, width, height)
-    pixels = _initialize_canvas(width, height, fallback_color)
+    # 1. Determine dimensions (use inputs if available, otherwise fallback)
+    target_width, target_height = _determine_dimensions(config, available_images)
+    if target_width == 0:
+        target_width, target_height = width, height
+
+    pixels = _initialize_canvas(target_width, target_height, fallback_color)
 
     # 2. Load required source pixels
     pixel_arrays = _load_source_pixel_arrays(config, available_images)
@@ -58,15 +61,16 @@ def generate_texture(
     if existing:
         bpy.data.images.remove(existing)
 
-    img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
+    img = bpy.data.images.new(name=name, width=target_width, height=target_height, alpha=True)
     _set_image_pixels(img, pixels)
     img.pack()
 
     return img
 
 
-def _determine_dimensions(config: dict, available_images: dict, width: int, height: int) -> tuple[int, int]:
+def _determine_dimensions(config: dict, available_images: dict) -> tuple[int, int]:
     """Calculate maximum dimensions from used textures."""
+    width, height = 0, 0
     used_types = set()
     for sources in config["mapping"].values():
         for source in sources:
@@ -103,7 +107,7 @@ def _load_source_pixel_arrays(config: dict, available_images: dict) -> dict[str,
 def _apply_channel_mappings(pixels: np.ndarray, config: dict, pixel_arrays: dict):
     """Iterate through mapping config and pack channels into pixels array."""
     channel_indices = {"R": 0, "G": 1, "B": 2, "A": 3}
-    height, width, _ = pixels.shape
+    target_h, target_w, _ = pixels.shape
 
     for dest_ch_str, sources in config["mapping"].items():
         if dest_ch_str not in channel_indices:
@@ -124,11 +128,16 @@ def _apply_channel_mappings(pixels: np.ndarray, config: dict, pixel_arrays: dict
             src_ch_idx = channel_indices.get(src_ch_str, 0)
 
             if src_ch_idx < src_pixels.shape[2]:
-                h_src, w_src, _ = src_pixels.shape
-                h_min, w_min = min(height, h_src), min(width, w_src)
-
-                # Copy channel (handling potential resolution mismatches)
-                pixels[:h_min, :w_min, dest_ch_idx] = src_pixels[:h_min, :w_min, src_ch_idx]
+                src_h, src_w, _ = src_pixels.shape
+                
+                # If resolutions don't match, perform nearest-neighbor scaling
+                if src_h != target_h or src_w != target_w:
+                    # Simple nearest-neighbor upscale/downscale
+                    row_indices = np.linspace(0, src_h - 1, target_h).astype(int)
+                    col_indices = np.linspace(0, src_w - 1, target_w).astype(int)
+                    pixels[:, :, dest_ch_idx] = src_pixels[row_indices[:, None], col_indices, src_ch_idx]
+                else:
+                    pixels[:, :, dest_ch_idx] = src_pixels[:, :, src_ch_idx]
                 break
 
 
