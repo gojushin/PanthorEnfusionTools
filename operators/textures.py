@@ -175,7 +175,7 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
         # Multiply AO (Alpha of NMO) over BaseColor Map (BCR) before it goes to the base color output
         if "BCR" in generated_textures:
             mix = nodes.new("ShaderNodeMix")
-            mix.data_type = 'COLOR'
+            mix.data_type = 'RGBA'
             mix.blend_type = 'MULTIPLY'
             mix.inputs["Factor"].default_value = 1.0
             mix.location = (-200, 200)

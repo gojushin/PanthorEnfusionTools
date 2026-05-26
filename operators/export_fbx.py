@@ -124,7 +124,7 @@ class PanthorOTExportFbxEbt(Operator):
         else:
             self.report({"WARNING"}, "No specific collection found, exporting current selection.")
 
-        bpy.ops.ebt.export_fbx(quick_export=False)
+        bpy.ops.ebt.export_fbx('INVOKE_DEFAULT', quick_export=False)
         self.report({"INFO"}, "FBX exported using EBT")
         return {"FINISHED"}
 
