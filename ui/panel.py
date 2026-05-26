@@ -124,38 +124,8 @@ class PanthorPTMainPanel(Panel):
         # --- Colliders ---
         box = layout.box()
         box.label(text="3. Colliders", icon="MESH_CUBE")
-        row = box.row()
-        row.operator("panthor.fix_colliders", text="Fix Colliders", icon="AUTO")
-        row.operator("panthor.validate_colliders", text="Validate", icon="CHECKMARK")
 
-        row = box.row()
-        row.template_list(
-            "PanthorULColliderList",
-            "",
-            context.scene,
-            "panthor_colliders",
-            context.scene,
-            "panthor_collider_index",
-            rows=3,
-        )
-        col = row.column(align=True)
-        col.operator("panthor.remove_collider", text="", icon="REMOVE")
-
-        # Setup operator next to the list
-        idx = context.scene.panthor_collider_index
-        has_selected = idx >= 0 and idx < len(context.scene.panthor_colliders)
-        op = col.operator("panthor.setup_collider", text="", icon="PROPERTIES")
-        if has_selected and context.scene.panthor_colliders[idx].obj:
-            op.collider_name = context.scene.panthor_colliders[idx].obj.name
-        else:
-            op.collider_name = ""
-            op.enabled = False
-
-        col.separator()
-        col.operator("panthor.refresh_colliders", text="", icon="FILE_REFRESH")
-
-        box.prop(context.scene, "panthor_hide_colliders", text="Hide Colliders", icon="HIDE_ON")
-
+        # Always show: Add Primitive (needed to create the first collider)
         box.label(text="Add Primitive:")
         row = box.row(align=True)
         row.operator("panthor.add_collider", text="Box", icon="MESH_CUBE").collider_type = "BOX"
@@ -164,6 +134,41 @@ class PanthorPTMainPanel(Panel):
         row = box.row(align=True)
         row.operator("panthor.add_collider", text="Capsule", icon="MESH_CAPSULE").collider_type = "CAPSULE"
         row.operator("panthor.add_collider", text="Cylinder", icon="MESH_CYLINDER").collider_type = "CYLINDER"
+
+        # Only show management options when colliders exist
+        has_colliders = len(context.scene.panthor_colliders) > 0
+        if has_colliders:
+            row = box.row()
+            row.operator("panthor.fix_colliders", text="Fix Colliders", icon="AUTO")
+            row.operator("panthor.validate_colliders", text="Validate", icon="CHECKMARK")
+
+            row = box.row()
+            row.template_list(
+                "PanthorULColliderList",
+                "",
+                context.scene,
+                "panthor_colliders",
+                context.scene,
+                "panthor_collider_index",
+                rows=3,
+            )
+            col = row.column(align=True)
+            col.operator("panthor.remove_collider", text="", icon="REMOVE")
+
+            # Setup operator next to the list
+            idx = context.scene.panthor_collider_index
+            has_selected = idx >= 0 and idx < len(context.scene.panthor_colliders)
+            op = col.operator("panthor.setup_collider", text="", icon="PROPERTIES")
+            if has_selected and context.scene.panthor_colliders[idx].obj:
+                op.collider_name = context.scene.panthor_colliders[idx].obj.name
+            else:
+                op.collider_name = ""
+                op.enabled = False
+
+            col.separator()
+            col.operator("panthor.refresh_colliders", text="", icon="FILE_REFRESH")
+
+            box.prop(context.scene, "panthor_hide_colliders", text="Hide Colliders", icon="HIDE_ON")
 
         # --- LODs ---
         box = layout.box()
