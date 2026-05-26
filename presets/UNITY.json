@@ -32,11 +32,11 @@
                     "NORMAL.R"
                 ],
                 "G": [
-                    "MASK.R",
-                    "METALNESS.R"
+                    "NORMAL.G"
                 ],
                 "B": [
-                    "NORMAL.G"
+                    "MASK.R",
+                    "METALNESS.R"
                 ],
                 "A": [
                     "MASK.G",

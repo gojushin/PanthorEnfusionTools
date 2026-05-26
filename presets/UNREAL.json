@@ -32,11 +32,11 @@
                     "NORMAL.R"
                 ],
                 "G": [
-                    "ORM.B",
-                    "METALNESS.R"
+                    "NORMAL.G"
                 ],
                 "B": [
-                    "NORMAL.G"
+                    "ORM.B",
+                    "METALNESS.R"
                 ],
                 "A": [
                     "ORM.R",

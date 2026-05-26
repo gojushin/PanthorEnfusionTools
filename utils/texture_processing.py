@@ -129,7 +129,7 @@ def _apply_channel_mappings(pixels: np.ndarray, config: dict, pixel_arrays: dict
 
             if src_ch_idx < src_pixels.shape[2]:
                 src_h, src_w, _ = src_pixels.shape
-                
+
                 # If resolutions don't match, perform nearest-neighbor scaling
                 if src_h != target_h or src_w != target_w:
                     # Simple nearest-neighbor upscale/downscale

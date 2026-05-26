@@ -5,7 +5,7 @@ from typing import ClassVar
 
 import bpy
 from bpy.props import CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
-from bpy.types import Image, Material, Operator, PropertyGroup
+from bpy.types import Material, Operator, PropertyGroup
 
 from ..utils.constants import TEXTURE_SUFFIXES
 from ..utils.texture_presets import TEXTURE_PRESETS
@@ -77,7 +77,7 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
     if not mapping_items:
         return
 
-    from ..utils.texture_processing import generate_texture, is_image_color
+    from ..utils.texture_processing import is_image_color
 
     # Use the source preset from the first item as the master preset for this material
     preset_key = mapping_items[0].source_preset
@@ -86,11 +86,17 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
         return
 
     # Prepare available images for the generator
+    tex_bcr = None
     available_images = {}
     for item in mapping_items:
-        # Load the image if not already loaded
-        img = bpy.data.images.load(item.filepath, check_existing=True)
-        available_images[item.texture_type] = img
+        if not os.path.exists(item.filepath):
+            continue
+        try:
+            # Load the image if not already loaded
+            img = bpy.data.images.load(item.filepath, check_existing=True)
+            available_images[item.texture_type] = img
+        except Exception:
+            continue
 
     generated_textures = {}
     for map_config in preset["maps"]:
@@ -131,7 +137,10 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
         tex_bcr = nodes.new("ShaderNodeTexImage")
         tex_bcr.image = generated_textures["BCR"]
         tex_bcr.location = (-600, 200)
-        links.new(tex_bcr.outputs[0], bsdf.inputs["Base Color"])
+
+        # Link base color only if NMO is not there to multiply it with AO
+        if "NMO" not in generated_textures:
+            links.new(tex_bcr.outputs[0], bsdf.inputs["Base Color"])
 
         # Alpha channel of BCR is Roughness
         links.new(tex_bcr.outputs["Alpha"], bsdf.inputs["Roughness"])
@@ -143,25 +152,37 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
         if tex_nmo.image:
             tex_nmo.image.colorspace_settings.name = "Non-Color"
 
-        # NMO: R+B = Normal, G = Metallic, A = AO
+        # NMO: (RG + Grey Channel for Blue = Normal), (B is Metallic), (A is Ambient Occlusion)
         sep = nodes.new("ShaderNodeSeparateColor")
         sep.location = (-400, -100)
         links.new(tex_nmo.outputs[0], sep.inputs[0])
 
-        # Metallic
-        links.new(sep.outputs["Green"], bsdf.inputs["Metallic"])
+        # Metallic is now B (Blue)
+        links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
 
-        # Normal Map reconstruction (R, B, 1.0)
+        # Normal Map reconstruction (Red -> Red, Green -> Green, Blue -> constant 0.5)
         comb = nodes.new("ShaderNodeCombineColor")
         comb.location = (-200, -100)
         links.new(sep.outputs["Red"], comb.inputs["Red"])
-        links.new(sep.outputs["Blue"], comb.inputs["Green"])  # We use Blue as the Y channel
-        comb.inputs["Blue"].default_value = 1.0
+        links.new(sep.outputs["Green"], comb.inputs["Green"])
+        comb.inputs["Blue"].default_value = 0.5
 
         norm_map = nodes.new("ShaderNodeNormalMap")
         norm_map.location = (0, -200)
         links.new(comb.outputs[0], norm_map.inputs["Color"])
         links.new(norm_map.outputs[0], bsdf.inputs["Normal"])
+
+        # Multiply AO (Alpha of NMO) over BaseColor Map (BCR) before it goes to the base color output
+        if "BCR" in generated_textures:
+            mix = nodes.new("ShaderNodeMix")
+            mix.data_type = 'COLOR'
+            mix.blend_type = 'MULTIPLY'
+            mix.inputs["Factor"].default_value = 1.0
+            mix.location = (-200, 200)
+
+            links.new(tex_bcr.outputs[0], mix.inputs["A"])
+            links.new(sep.outputs["Alpha"], mix.inputs["B"])
+            links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
 
     if "A" in generated_textures:
         tex_a = nodes.new("ShaderNodeTexImage")
@@ -229,13 +250,13 @@ class PanthorOTImportTextures(Operator):
 
                     # Best guess detection
                     name_lower = file.lower()
-                    
+
                     # 1. Detect Type
                     for tex_type, suffixes in TEXTURE_SUFFIXES.items():
                         if any(name_lower.endswith(s + os.path.splitext(name_lower)[1]) or f"_{s}" in name_lower for s in suffixes):
                             item.texture_type = tex_type
                             break
-                    
+
                     # 2. Detect Material
                     best_mat = "NONE"
                     for mat_name in mats:
@@ -255,7 +276,7 @@ class PanthorOTImportTextures(Operator):
         for item in context.scene.panthor_texture_import_list:
             if item.target_material == "NONE":
                 continue
-            
+
             if item.target_material not in mapping_by_material:
                 mapping_by_material[item.target_material] = []
             mapping_by_material[item.target_material].append(item)
@@ -293,7 +314,7 @@ def register():
 
     bpy.types.Scene.panthor_textures = CollectionProperty(type=PanthorTextureItem)
     bpy.types.Scene.panthor_texture_index = IntProperty()
-    
+
     bpy.types.Scene.panthor_texture_import_list = CollectionProperty(type=PanthorTextureImportItem)
 
     from ..utils.texture_presets import get_preset_items

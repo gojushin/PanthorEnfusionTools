@@ -33,12 +33,12 @@
                     "NORMAL.R"
                 ],
                 "G": [
+                    "NORMAL.G"
+                ],
+                "B": [
                     "METALNESS.R",
                     "METALNESS.G",
                     "METALNESS.B"
-                ],
-                "B": [
-                    "NORMAL.G"
                 ],
                 "A": [
                     "AO.R",

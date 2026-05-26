@@ -1,8 +1,9 @@
+import re
 from typing import ClassVar
 
 import bmesh
-import mathutils
 import bpy
+import mathutils
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty
 from bpy.types import Context, Object, Operator, PropertyGroup
 
@@ -103,7 +104,7 @@ def _rebuild_collider_geometry(obj: Object):
     # Move geometry to its world position but keep object at origin (Enfusion requirement)
     for v in obj.data.vertices:
         v.co += center
-    
+
     obj.location = (0, 0, 0)
     obj.rotation_euler = (0, 0, 0)
     obj.scale = (1, 1, 1)
@@ -131,10 +132,17 @@ def rename_and_enumerate_colliders():
 
     for obj in colliders:
         # Parse base name
-        parts = obj.name.split("_")
-        if len(parts) >= 2:
-            prefix = parts[0] + "_"
-            base_name = parts[1]
+        prefix = ""
+        for p in prefixes:
+            if obj.name.startswith(p):
+                prefix = p
+                break
+
+        if prefix:
+            remaining = obj.name[len(prefix):]
+            # Strip trailing numeric suffix of the form _01, _02, etc.
+            match = re.search(r"_(\d+)$", remaining)
+            base_name = remaining[:match.start()] if match else remaining
 
             key = f"{prefix}{base_name}"
 
@@ -176,12 +184,12 @@ class PanthorOTFixColliders(Operator):
             COLLIDER_PREFIX_CAPSULE,
             COLLIDER_PREFIX_CYLINDER,
         )
-        
+
         targets = [obj for obj in context.scene.objects if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes)]
-        
+
         for obj in targets:
             _rebuild_collider_geometry(obj)
-            
+
         rename_and_enumerate_colliders()
         self.report({"INFO"}, "Colliders rebuilt and enumerated.")
         return {"FINISHED"}
@@ -222,12 +230,12 @@ class PanthorOTAddCollider(Operator):
 
         # Get target bounding box
         center, dims = _get_bounding_box_info(active)
-        
+
         # Create a temp object and use our fix logic to build it
         mesh = bpy.data.meshes.new("TempCollider")
         new_obj = bpy.data.objects.new("TempCollider", mesh)
         context.collection.objects.link(new_obj)
-        
+
         # Add a dummy vertex at the corners to define the bounds for the rebuilder
         bm = bmesh.new()
         half = dims / 2
@@ -245,7 +253,7 @@ class PanthorOTAddCollider(Operator):
             "CAPSULE": COLLIDER_PREFIX_CAPSULE,
             "CYLINDER": COLLIDER_PREFIX_CYLINDER,
         }[self.collider_type]
-        
+
         new_obj.name = f"{prefix}{base_name}"
         _rebuild_collider_geometry(new_obj)
 
@@ -299,14 +307,14 @@ class PanthorOTValidateColliders(Operator):
                 # 3. Check Geometry Specifics
                 bm = bmesh.new()
                 bm.from_mesh(obj.data)
-                
+
                 # UCX Specific checks
                 if obj.name.startswith(COLLIDER_PREFIX_CONVEX):
                     # Manifold
                     non_manifold = [e for e in bm.edges if not e.is_manifold]
                     if non_manifold:
                         errors.append(f"{obj.name}: Contains {len(non_manifold)} non-manifold edges.")
-                    
+
                     # Planar and Convex faces
                     for f in bm.faces:
                         if not f.is_planar:
@@ -315,7 +323,7 @@ class PanthorOTValidateColliders(Operator):
                         if not f.is_convex:
                             errors.append(f"{obj.name}: Non-convex face detected.")
                             break
-                
+
                 # Primitive Specific checks (Simple dimension checks)
                 verts_local = [v.co for v in bm.verts]
                 if verts_local:
@@ -325,7 +333,7 @@ class PanthorOTValidateColliders(Operator):
                     dx = max(xs) - min(xs)
                     dy = max(ys) - min(ys)
                     dz = max(zs) - min(zs)
-                    
+
                     if obj.name.startswith(COLLIDER_PREFIX_SPHERE):
                         if not (round(dx, 3) == round(dy, 3) == round(dz, 3)):
                             errors.append(f"{obj.name}: Sphere must have uniform dimensions (current: {dx:.2f}, {dy:.2f}, {dz:.2f}).")
@@ -418,6 +426,44 @@ class PanthorOTRemoveCollider(Operator):
         return {"FINISHED"}
 
 
+class PanthorOTSetupCollider(Operator):
+    """Setup Enfusion game material and layer preset for the collider."""
+
+    bl_idname: ClassVar[str] = "panthor.setup_collider"
+    bl_label: ClassVar[str] = "Setup Collider"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
+
+    collider_name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        """Execute collider setup operator."""
+        obj = bpy.data.objects.get(self.collider_name)
+        if not obj:
+            self.report({"WARNING"}, f"Collider {self.collider_name} not found.")
+            return {"CANCELLED"}
+
+        # Check if EBT is available
+        if not (hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "collider_setup")):
+            self.report({"ERROR"}, "EBT (Arma Reforger Workbench addon) is not installed or enabled.")
+            return {"CANCELLED"}
+
+        # Select only this object and make it active
+        if context.active_object and context.active_object.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT", toggle=False)
+
+        # Unhide if hidden to prevent Blender select_set RuntimeError
+        if obj.hide_viewport:
+            obj.hide_viewport = False
+
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+
+        # Call the ebt.collider_setup operator
+        bpy.ops.ebt.collider_setup("INVOKE_DEFAULT")
+        return {"FINISHED"}
+
+
 def register():
     """Register collider operators."""
     bpy.utils.register_class(PanthorOTFixColliders)
@@ -434,10 +480,12 @@ def register():
     )
     bpy.utils.register_class(PanthorOTRefreshColliders)
     bpy.utils.register_class(PanthorOTRemoveCollider)
+    bpy.utils.register_class(PanthorOTSetupCollider)
 
 
 def unregister():
     """Unregister collider operators."""
+    bpy.utils.unregister_class(PanthorOTSetupCollider)
     bpy.utils.unregister_class(PanthorOTRemoveCollider)
     bpy.utils.unregister_class(PanthorOTRefreshColliders)
     del bpy.types.Scene.panthor_hide_colliders

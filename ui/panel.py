@@ -65,6 +65,13 @@ class PanthorULColliderList(UIList):
                     c_icon = "MESH_CYLINDER"
 
                 row.label(text=name, icon=c_icon)
+
+                # Check if EBT is available
+                has_ebt = hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "collider_setup")
+                op = row.operator("panthor.setup_collider", text="", icon="PROPERTIES")
+                op.collider_name = name
+                if not has_ebt:
+                    op.enabled = False
             else:
                 row.label(text="<Missing>", icon="ERROR")
         elif self.layout_type == "GRID":
@@ -97,8 +104,6 @@ class PanthorPTMainPanel(Panel):
         # --- Import Textures ---
         box = layout.box()
         box.label(text="2. Textures", icon="TEXTURE")
-
-        box.prop(context.scene, "panthor_texture_preset", text="Preset")
 
         row = box.row(align=True)
         row.operator("panthor.import_textures", text="Import & Remap Textures")
@@ -135,6 +140,17 @@ class PanthorPTMainPanel(Panel):
         )
         col = row.column(align=True)
         col.operator("panthor.remove_collider", text="", icon="REMOVE")
+
+        # Setup operator next to the list
+        idx = context.scene.panthor_collider_index
+        has_selected = idx >= 0 and idx < len(context.scene.panthor_colliders)
+        op = col.operator("panthor.setup_collider", text="", icon="PROPERTIES")
+        if has_selected and context.scene.panthor_colliders[idx].obj:
+            op.collider_name = context.scene.panthor_colliders[idx].obj.name
+        else:
+            op.collider_name = ""
+            op.enabled = False
+
         col.separator()
         col.operator("panthor.refresh_colliders", text="", icon="FILE_REFRESH")
 
