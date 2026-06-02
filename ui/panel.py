@@ -23,7 +23,7 @@ class PanthorULLodList(UIList):
                     row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
 
                 # Weighted Normal button
-                wn_op = row.operator("panthor.add_weighted_normal_lod", text="", icon="MOD_NORMALEDGE")
+                wn_op = row.operator("panthor.add_weighted_normal_lod", text="", icon="MOD_NORMALEDIT")
                 wn_op.lod_name = item.obj.name
 
                 row.prop(item.obj, "hide_viewport", text="", emboss=False)
