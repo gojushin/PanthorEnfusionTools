@@ -22,6 +22,10 @@ class PanthorULLodList(UIList):
                 else:
                     row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
 
+                # Weighted Normal button
+                wn_op = row.operator("panthor.add_weighted_normal_lod", text="", icon="MOD_NORMALEDGE")
+                wn_op.lod_name = item.obj.name
+
                 row.prop(item.obj, "hide_viewport", text="", emboss=False)
             else:
                 row.label(text="<Missing>", icon="ERROR")
@@ -66,10 +70,6 @@ class PanthorULColliderList(UIList):
                     c_icon = "MESH_CYLINDER"
 
                 row.label(text=name, icon=c_icon)
-
-                # Weighted Normal button
-                wn_op = row.operator("panthor.add_weighted_normal", text="", icon="MOD_NORMALEDGE")
-                wn_op.collider_name = name
 
                 # Check if EBT is available
                 has_ebt = hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "collider_setup")

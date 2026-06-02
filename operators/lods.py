@@ -215,6 +215,35 @@ class PanthorOTRefreshLODs(Operator):
         return {"FINISHED"}
 
 
+class PanthorOTAddWeightedNormalToLOD(Operator):
+    """Add a Weighted Normal modifier to LOD with Keep Sharp enabled and weight 100."""
+
+    bl_idname: ClassVar[str] = "panthor.add_weighted_normal_lod"
+    bl_label: ClassVar[str] = "Add Weighted Normal"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
+
+    lod_name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        """Execute add weighted normal modifier to LOD."""
+        obj = bpy.data.objects.get(self.lod_name)
+        if not obj:
+            self.report({"WARNING"}, f"LOD object {self.lod_name} not found.")
+            return {"CANCELLED"}
+
+        # Don't add duplicate
+        if obj.modifiers.find("Weighted Normal") != -1:
+            self.report({"INFO"}, f"{obj.name} already has a Weighted Normal modifier.")
+            return {"CANCELLED"}
+
+        mod = obj.modifiers.new(name="Weighted Normal", type="WEIGHTED_NORMAL")
+        mod.keep_sharp = True
+        mod.weight = 100
+
+        self.report({"INFO"}, f"Added Weighted Normal modifier to {obj.name}.")
+        return {"FINISHED"}
+
+
 def _update_hide_lods(self, _context):
     """Toggle visibility of LOD1+ objects when the checkbox changes."""
     scene = bpy.context.scene
@@ -257,10 +286,12 @@ def register():
     bpy.utils.register_class(PanthorOTAddLOD)
     bpy.utils.register_class(PanthorOTRemoveLOD)
     bpy.utils.register_class(PanthorOTRefreshLODs)
+    bpy.utils.register_class(PanthorOTAddWeightedNormalToLOD)
 
 
 def unregister():
     """Unregister LOD operators."""
+    bpy.utils.unregister_class(PanthorOTAddWeightedNormalToLOD)
     bpy.utils.unregister_class(PanthorOTRefreshLODs)
     bpy.utils.unregister_class(PanthorOTRemoveLOD)
     bpy.utils.unregister_class(PanthorOTAddLOD)

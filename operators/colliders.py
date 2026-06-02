@@ -133,7 +133,15 @@ def _get_collider_basename(obj: Object, prefix: str) -> str:
 
 
 def rename_and_enumerate_colliders():
-    """Rename boxes from UCX to UBX and enumerate suffixes."""
+    """Rename boxes from UCX to UBX and enumerate suffixes.
+    
+    Uses a two-pass approach:
+    1. Ensure all colliders have their panthor_basename stored
+    2. Group by exact basename and enumerate only within each group
+    
+    This preserves numeric suffixes that are part of the model name
+    (e.g., SM_Armchair_02 vs SM_Armchair_03 are treated as different models).
+    """
     colliders = []
     prefixes = (
         COLLIDER_PREFIX_BOX,
@@ -147,11 +155,21 @@ def rename_and_enumerate_colliders():
         if obj.type == "MESH" and any(obj.name.startswith(p) for p in prefixes):
             colliders.append(obj)
 
-    # Dictionary to keep track of counts per base name
-    base_counts = {}
+    # PASS 1: Ensure all colliders have their basename stored
+    for obj in colliders:
+        prefix = ""
+        for p in prefixes:
+            if obj.name.startswith(p):
+                prefix = p
+                break
+        if prefix:
+            _get_collider_basename(obj, prefix)
+
+    # PASS 2: Group by exact (prefix + basename) and enumerate within groups
+    # Dictionary to track: key = "PREFIX_basename" -> list of objects
+    basename_groups = {}
 
     for obj in colliders:
-        # Parse base name
         prefix = ""
         for p in prefixes:
             if obj.name.startswith(p):
@@ -159,15 +177,22 @@ def rename_and_enumerate_colliders():
                 break
 
         if prefix:
-            base_name = _get_collider_basename(obj, prefix)
+            base_name = obj.get("panthor_basename", "")
             key = f"{prefix}{base_name}"
 
-            if key not in base_counts:
-                base_counts[key] = 0
-                obj.name = key
-            else:
-                base_counts[key] += 1
-                obj.name = f"{key}_{base_counts[key]:02d}"
+            if key not in basename_groups:
+                basename_groups[key] = []
+            basename_groups[key].append(obj)
+
+    # PASS 3: Rename objects within each group
+    for key, objs in basename_groups.items():
+        if len(objs) == 1:
+            # Single collider with this basename - no enumeration needed
+            objs[0].name = key
+        else:
+            # Multiple colliders - enumerate them
+            for idx, obj in enumerate(objs):
+                obj.name = f"{key}_{idx:02d}"
 
 
 def _get_bounding_box_info(obj: Object) -> tuple[mathutils.Vector, mathutils.Vector]:
@@ -490,33 +515,6 @@ class PanthorOTSetupCollider(Operator):
         return {"FINISHED"}
 
 
-class PanthorOTAddWeightedNormal(Operator):
-    """Add a Weighted Normal modifier with Keep Sharp enabled and weight 100."""
-
-    bl_idname: ClassVar[str] = "panthor.add_weighted_normal"
-    bl_label: ClassVar[str] = "Add Weighted Normal"
-    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
-
-    collider_name: bpy.props.StringProperty()
-
-    def execute(self, context):
-        """Execute add weighted normal modifier."""
-        obj = bpy.data.objects.get(self.collider_name)
-        if not obj:
-            self.report({"WARNING"}, f"Collider {self.collider_name} not found.")
-            return {"CANCELLED"}
-
-        # Don't add duplicate
-        if obj.modifiers.find("Weighted Normal") != -1:
-            self.report({"INFO"}, f"{obj.name} already has a Weighted Normal modifier.")
-            return {"CANCELLED"}
-
-        mod = obj.modifiers.new(name="Weighted Normal", type="WEIGHTED_NORMAL")
-        mod.keep_sharp = True
-        mod.weight = 100
-
-        self.report({"INFO"}, f"Added Weighted Normal modifier to {obj.name}.")
-        return {"FINISHED"}
 
 
 def register():
@@ -536,12 +534,10 @@ def register():
     bpy.utils.register_class(PanthorOTRefreshColliders)
     bpy.utils.register_class(PanthorOTRemoveCollider)
     bpy.utils.register_class(PanthorOTSetupCollider)
-    bpy.utils.register_class(PanthorOTAddWeightedNormal)
 
 
 def unregister():
     """Unregister collider operators."""
-    bpy.utils.unregister_class(PanthorOTAddWeightedNormal)
     bpy.utils.unregister_class(PanthorOTSetupCollider)
     bpy.utils.unregister_class(PanthorOTRemoveCollider)
     bpy.utils.unregister_class(PanthorOTRefreshColliders)
