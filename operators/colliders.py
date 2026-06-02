@@ -1,4 +1,3 @@
-import re
 from typing import ClassVar
 
 import bmesh
@@ -112,6 +111,27 @@ def _rebuild_collider_geometry(obj: Object):
     obj.data.update()
 
 
+def _get_collider_basename(obj: Object, prefix: str) -> str:
+    """Get the stored basename for a collider, or derive and store it.
+
+    The basename is stored as a custom property (``panthor_basename``) on the
+    object so that numeric parts of the basename (e.g. ``mymesh_02``) are never
+    accidentally stripped.  When no stored value exists, the full name after the
+    prefix is taken as the basename (imported colliders have no enumeration
+    suffix yet).
+    """
+    stored = obj.get("panthor_basename")
+    if stored:
+        return stored
+
+    # First time: use everything after the prefix as the basename.
+    # This is correct for freshly imported or newly created colliders
+    # which have not yet been enumerated.
+    remaining = obj.name[len(prefix):]
+    obj["panthor_basename"] = remaining
+    return remaining
+
+
 def rename_and_enumerate_colliders():
     """Rename boxes from UCX to UBX and enumerate suffixes."""
     colliders = []
@@ -139,11 +159,7 @@ def rename_and_enumerate_colliders():
                 break
 
         if prefix:
-            remaining = obj.name[len(prefix):]
-            # Strip trailing numeric suffix of the form _01, _02, etc.
-            match = re.search(r"_(\d+)$", remaining)
-            base_name = remaining[:match.start()] if match else remaining
-
+            base_name = _get_collider_basename(obj, prefix)
             key = f"{prefix}{base_name}"
 
             if key not in base_counts:
@@ -253,6 +269,9 @@ class PanthorOTAddCollider(Operator):
             "CAPSULE": COLLIDER_PREFIX_CAPSULE,
             "CYLINDER": COLLIDER_PREFIX_CYLINDER,
         }[self.collider_type]
+
+        # Store the basename so rename_and_enumerate_colliders never strips it
+        new_obj["panthor_basename"] = base_name
 
         new_obj.name = f"{prefix}{base_name}"
         _rebuild_collider_geometry(new_obj)
@@ -460,7 +479,43 @@ class PanthorOTSetupCollider(Operator):
         context.view_layer.objects.active = obj
 
         # Call the ebt.collider_setup operator
-        bpy.ops.ebt.collider_setup("INVOKE_DEFAULT")
+        try:
+            bpy.ops.ebt.collider_setup("INVOKE_DEFAULT")
+        except RuntimeError:
+            self.report(
+                {"ERROR"},
+                "Enfusion Workbench is not running. Start the Workbench and try again.",
+            )
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class PanthorOTAddWeightedNormal(Operator):
+    """Add a Weighted Normal modifier with Keep Sharp enabled and weight 100."""
+
+    bl_idname: ClassVar[str] = "panthor.add_weighted_normal"
+    bl_label: ClassVar[str] = "Add Weighted Normal"
+    bl_options: ClassVar[set[str]] = {"REGISTER", "UNDO"}
+
+    collider_name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        """Execute add weighted normal modifier."""
+        obj = bpy.data.objects.get(self.collider_name)
+        if not obj:
+            self.report({"WARNING"}, f"Collider {self.collider_name} not found.")
+            return {"CANCELLED"}
+
+        # Don't add duplicate
+        if obj.modifiers.find("Weighted Normal") != -1:
+            self.report({"INFO"}, f"{obj.name} already has a Weighted Normal modifier.")
+            return {"CANCELLED"}
+
+        mod = obj.modifiers.new(name="Weighted Normal", type="WEIGHTED_NORMAL")
+        mod.keep_sharp = True
+        mod.weight = 100
+
+        self.report({"INFO"}, f"Added Weighted Normal modifier to {obj.name}.")
         return {"FINISHED"}
 
 
@@ -481,10 +536,12 @@ def register():
     bpy.utils.register_class(PanthorOTRefreshColliders)
     bpy.utils.register_class(PanthorOTRemoveCollider)
     bpy.utils.register_class(PanthorOTSetupCollider)
+    bpy.utils.register_class(PanthorOTAddWeightedNormal)
 
 
 def unregister():
     """Unregister collider operators."""
+    bpy.utils.unregister_class(PanthorOTAddWeightedNormal)
     bpy.utils.unregister_class(PanthorOTSetupCollider)
     bpy.utils.unregister_class(PanthorOTRemoveCollider)
     bpy.utils.unregister_class(PanthorOTRefreshColliders)

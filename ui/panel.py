@@ -16,8 +16,9 @@ class PanthorULLodList(UIList):
             if item.obj:
                 row.label(text=item.obj.name, icon="OBJECT_DATAMODE")
 
-                if item.has_modifier:
-                    row.prop(item, "ratio", text="")
+                mod = item.obj.modifiers.get("Decimate") if item.obj else None
+                if mod:
+                    row.prop(mod, "ratio", text="")
                 else:
                     row.label(text=f"{item.calc_ratio:.2f}", icon="LOCKED")
 
@@ -65,6 +66,10 @@ class PanthorULColliderList(UIList):
                     c_icon = "MESH_CYLINDER"
 
                 row.label(text=name, icon=c_icon)
+
+                # Weighted Normal button
+                wn_op = row.operator("panthor.add_weighted_normal", text="", icon="MOD_NORMALEDGE")
+                wn_op.collider_name = name
 
                 # Check if EBT is available
                 has_ebt = hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "collider_setup")
