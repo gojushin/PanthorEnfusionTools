@@ -97,14 +97,24 @@ class PanthorPTMainPanel(Panel):
         """Draw the panel."""
         layout = self.layout
 
-        # --- Import FBX ---
+        # --- Import and Target ---
         box = layout.box()
-        box.label(text="1. Import FBX", icon="IMPORT")
+        box.label(text="1. Import and Target", icon="IMPORT")
         box.operator("panthor.import_fbx", text="Import FBX")
 
         # Collection name field (only shown after an import)
         if context.scene.get("panthor_import_col_real", ""):
             box.prop(context.scene, "panthor_import_collection_name", text="Collection")
+
+        # Workbench path
+        box.prop(context.scene, "panthor_workbench_path", text="Workbench Path")
+
+        # ENF materials toggle (dim when EBT is not available)
+        row = box.row(align=True)
+        has_ebt = hasattr(bpy.ops, "ebt") and hasattr(bpy.ops.ebt, "create_new_enfusion_material")
+        if not has_ebt:
+            row.enabled = False
+        row.prop(context.scene, "panthor_use_enf_materials", text="Create ENF Materials (requires EBT + Workbench)")
 
         # --- Import Textures ---
         box = layout.box()

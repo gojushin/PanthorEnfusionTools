@@ -1,6 +1,7 @@
 """FBX Export Operators."""
 
 import os
+import shutil
 from typing import ClassVar
 
 import bpy
@@ -102,6 +103,21 @@ class PanthorOTExportFbx(Operator):
                 img.filepath_raw = img_path
                 img.file_format = "PNG"
                 img.save()
+
+        # Copy textures from workbench path to the export directory
+        workbench_path = getattr(context.scene, "panthor_workbench_path", "")
+        if workbench_path and os.path.isdir(workbench_path):
+            copied = 0
+            for fname in os.listdir(workbench_path):
+                if fname.lower().endswith(".png"):
+                    src = os.path.join(workbench_path, fname)
+                    dst = os.path.join(self.directory, fname)
+                    if os.path.abspath(src) != os.path.abspath(dst):
+                        shutil.copy2(src, dst)
+                        copied += 1
+            if copied:
+                self.report({"INFO"}, f"FBX exported to {self.directory} ({copied} workbench texture(s) copied)")
+                return {"FINISHED"}
 
         self.report({"INFO"}, f"FBX exported to {self.directory}")
         return {"FINISHED"}

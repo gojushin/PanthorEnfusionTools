@@ -4,7 +4,7 @@ import os
 from typing import ClassVar
 
 import bpy
-from bpy.props import CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Material, Operator, PropertyGroup
 
 from ..utils.constants import TEXTURE_SUFFIXES
@@ -72,6 +72,61 @@ def _refresh_texture_list(context):
             item.img = img
 
 
+def _save_texture_to_workbench(img: bpy.types.Image, workbench_path: str) -> str:
+    """Save a Blender image to the workbench path as PNG and return the absolute file path."""
+    os.makedirs(workbench_path, exist_ok=True)
+    file_path = os.path.join(workbench_path, f"{img.name}.png")
+    img.filepath_raw = file_path
+    img.file_format = "PNG"
+    img.save()
+    return os.path.abspath(file_path)
+
+
+def _setup_enf_material(material: Material, generated_textures: dict, workbench_path: str):
+    """Create an ENF MatPBRBasic material and assign BCR/NMO textures via EBT operators."""
+    has_ebt = (
+        hasattr(bpy.ops, "ebt")
+        and hasattr(bpy.ops.ebt, "create_new_enfusion_material")
+        and hasattr(bpy.ops.ebt, "load_shader_texture")
+    )
+    if not has_ebt:
+        return False
+
+    # Save textures to workbench path first
+    saved_paths = {}
+    for map_name, img in generated_textures.items():
+        saved_paths[map_name] = _save_texture_to_workbench(img, workbench_path)
+
+    # Set context material so EBT operators can find it
+    # EBT operators read from context.material — we override via an override context
+    override = bpy.context.copy()
+    override["material"] = material
+
+    # Create ENF material (MatPBRBasic)
+    with bpy.context.temp_override(**override):
+        bpy.ops.ebt.create_new_enfusion_material("EXEC_DEFAULT", shader_class="MatPBRBasic")
+
+    # Assign BCR texture
+    if "BCR" in saved_paths:
+        with bpy.context.temp_override(**override):
+            bpy.ops.ebt.load_shader_texture(
+                "EXEC_DEFAULT",
+                enf_texture_type="BCRMap",
+                filepath=saved_paths["BCR"],
+            )
+
+    # Assign NMO texture
+    if "NMO" in saved_paths:
+        with bpy.context.temp_override(**override):
+            bpy.ops.ebt.load_shader_texture(
+                "EXEC_DEFAULT",
+                enf_texture_type="NMOMap",
+                filepath=saved_paths["NMO"],
+            )
+
+    return True
+
+
 def process_material_textures_explicit(material: Material, mapping_items: list[PanthorTextureImportItem]):
     """Generate textures based on explicit mapping and set up the material."""
     if not mapping_items:
@@ -84,6 +139,12 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
     preset = TEXTURE_PRESETS.get(preset_key)
     if not preset:
         return
+
+    # Determine whether to use ENF materials
+    scene = bpy.context.scene
+    use_enf = getattr(scene, "panthor_use_enf_materials", False)
+    workbench_path = getattr(scene, "panthor_workbench_path", "")
+    can_use_enf = use_enf and workbench_path and hasattr(bpy.ops, "ebt")
 
     # Prepare available images for the generator
     tex_bcr = None
@@ -118,6 +179,13 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
 
         generated_textures[map_name] = img
 
+    # --- ENF Material path ---
+    if can_use_enf:
+        success = _setup_enf_material(material, generated_textures, workbench_path)
+        if success:
+            return
+
+    # --- Principled BSDF fallback path ---
     # Set up material nodes
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -323,9 +391,24 @@ def register():
         items=get_preset_items,
     )
 
+    bpy.types.Scene.panthor_workbench_path = StringProperty(
+        name="Workbench Path",
+        description="Directory where converted textures are saved for Workbench/EBT use",
+        subtype="DIR_PATH",
+        default="",
+    )
+
+    bpy.types.Scene.panthor_use_enf_materials = BoolProperty(
+        name="Create ENF Materials",
+        description="Create Enfusion (ENF) materials via EBT instead of Principled BSDF nodes. Requires EBT and a running Workbench instance",
+        default=False,
+    )
+
 
 def unregister():
     """Unregister texture operators."""
+    del bpy.types.Scene.panthor_use_enf_materials
+    del bpy.types.Scene.panthor_workbench_path
     del bpy.types.Scene.panthor_texture_preset
     del bpy.types.Scene.panthor_texture_import_list
     del bpy.types.Scene.panthor_texture_index
