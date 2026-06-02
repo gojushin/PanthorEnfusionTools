@@ -163,3 +163,28 @@ def is_image_color(image: bpy.types.Image, color: tuple[float, ...], tolerance: 
     # Compare against target color for existing channels
     target = np.array(color[: image.channels], dtype=np.float32)
     return np.all(np.abs(pixels - target) < tolerance)
+
+
+def is_nmo_default(image: bpy.types.Image) -> bool:
+    """Check if an NMO image is the default flat normal / no metal / no AO map.
+
+    Default NMO: R=0.5, G=0.5, B=0.0, A=1.0
+    R and G are allowed a tolerance of ±0.025, B and A must be exact.
+    """
+    if not image or not image.has_data:
+        return True
+
+    pixels = np.empty(image.size[0] * image.size[1] * image.channels, dtype=np.float32)
+    image.pixels.foreach_get(pixels)
+    pixels = pixels.reshape((-1, image.channels))
+
+    if image.channels > 0 and not np.all(np.abs(pixels[:, 0] - 0.5) <= 0.025):
+        return False
+    if image.channels > 1 and not np.all(np.abs(pixels[:, 1] - 0.5) <= 0.025):
+        return False
+    if image.channels > 2 and not np.all(pixels[:, 2] == 0.0):
+        return False
+    if image.channels > 3 and not np.all(pixels[:, 3] == 1.0):
+        return False
+
+    return True

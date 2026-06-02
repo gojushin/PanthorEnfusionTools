@@ -13,7 +13,9 @@ from ..utils.constants import (
     COLLIDER_PREFIX_CONVEX,
     COLLIDER_PREFIX_CYLINDER,
     COLLIDER_PREFIX_SPHERE,
+    TEXTURE_SUFFIX_ENFUSION_NMO,
 )
+from ..utils.texture_processing import is_nmo_default
 
 
 class PanthorOTExportFbx(Operator):
@@ -82,8 +84,12 @@ class PanthorOTExportFbx(Operator):
         )
 
         # Save Textures
-        for img in bpy.data.images:
+        for img in list(bpy.data.images):
             if img.has_data and img.name.startswith("PTR_"):
+                # Skip default/empty NMO maps (flat normal, no metal, no AO)
+                if img.name.endswith(TEXTURE_SUFFIX_ENFUSION_NMO) and is_nmo_default(img):
+                    continue
+
                 # Always save as PNG for Enfusion compatibility
                 img_path = os.path.join(self.directory, f"{img.name}.png")
                 img.filepath_raw = img_path
