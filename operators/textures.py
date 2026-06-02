@@ -92,10 +92,25 @@ def _setup_enf_material(material: Material, generated_textures: dict, workbench_
     if not has_ebt:
         return False
 
+    # Guard import of Workbench API — only available when EBT (EnfusionBlenderTools) is installed
+    try:
+        from EnfusionBlenderTools.core.workbench import call_workbench_func as _call_wb
+        _wb_available = True
+    except ImportError:
+        _wb_available = False
+
     # Save textures to workbench path first
     saved_paths = {}
     for map_name, img in generated_textures.items():
         saved_paths[map_name] = _save_texture_to_workbench(img, workbench_path)
+
+    # Register each saved texture with Workbench so it is known to the running project
+    if _wb_available:
+        for saved_path in saved_paths.values():
+            try:
+                _call_wb("RegisterResource", {"path": [saved_path]})
+            except Exception as exc:
+                print(f"[PanthorTools] Warning: RegisterResource failed for {saved_path}: {exc}")
 
     # Set context material so EBT operators can find it
     # EBT operators read from context.material — we override via an override context
@@ -108,21 +123,27 @@ def _setup_enf_material(material: Material, generated_textures: dict, workbench_
 
     # Assign BCR texture
     if "BCR" in saved_paths:
-        with bpy.context.temp_override(**override):
-            bpy.ops.ebt.load_shader_texture(
-                "EXEC_DEFAULT",
-                enf_texture_type="BCRMap",
-                filepath=saved_paths["BCR"],
-            )
+        try:
+            with bpy.context.temp_override(**override):
+                bpy.ops.ebt.load_shader_texture(
+                    "EXEC_DEFAULT",
+                    enf_texture_type="BCRMap",
+                    filepath=saved_paths["BCR"],
+                )
+        except RuntimeError as exc:
+            print(f"[PanthorTools] Warning: Could not assign BCRMap for {material.name}: {exc}")
 
     # Assign NMO texture
     if "NMO" in saved_paths:
-        with bpy.context.temp_override(**override):
-            bpy.ops.ebt.load_shader_texture(
-                "EXEC_DEFAULT",
-                enf_texture_type="NMOMap",
-                filepath=saved_paths["NMO"],
-            )
+        try:
+            with bpy.context.temp_override(**override):
+                bpy.ops.ebt.load_shader_texture(
+                    "EXEC_DEFAULT",
+                    enf_texture_type="NMOMap",
+                    filepath=saved_paths["NMO"],
+                )
+        except RuntimeError as exc:
+            print(f"[PanthorTools] Warning: Could not assign NMOMap for {material.name}: {exc}")
 
     return True
 
