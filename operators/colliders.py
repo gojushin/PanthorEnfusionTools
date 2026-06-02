@@ -263,10 +263,10 @@ class PanthorOTAddCollider(Operator):
         base_name = context.scene.panthor_import_collection_name
         if not base_name:
             base_name = active.name
-            # Strip LODx_ prefix if present (e.g. "LOD0_MyMesh" → "MyMesh")
-            if base_name.startswith("LOD") and "_" in base_name[3:]:
-                num_str, _, rest = base_name[3:].partition("_")
-                if num_str.isdigit():
+            # Strip _LODx suffix if present (e.g. "MyMesh_LOD0" → "MyMesh")
+            if "_LOD" in base_name:
+                rest, _, lod_suffix = base_name.rpartition("_LOD")
+                if lod_suffix.isdigit():
                     base_name = rest
 
         # Get target bounding box

@@ -118,12 +118,10 @@ class PanthorOTImportFbx(Operator):
         for obj in imported_objects:
             name_lower = obj.name.lower()
 
-            # Detect LOD prefix: LOD{n}_Name
+            # Detect LOD suffix: Name_LOD{n}
             is_lod = (
-                name_lower.startswith("lod")
-                and len(name_lower) > 3
-                and name_lower[3].isdigit()
-                and "_" in name_lower[3:]
+                "_lod" in name_lower
+                and name_lower.rpartition("_lod")[2].isdigit()
             )
             is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
 
@@ -158,8 +156,8 @@ class PanthorOTImportFbx(Operator):
 
         # 1. Look for LOD0
         for obj in imported_objects:
-            if obj.name.upper().startswith("LOD0_"):
-                return obj.name[5:]
+            if obj.name.upper().endswith("_LOD0"):
+                return obj.name[:-5]
 
         # 2. Fallback to first non-collider mesh
         collider_prefixes = ("UCX", "UBX", "USP", "UCS", "UCL", "UBX_", "UCX_", "USP_", "UCS_", "UCL_")
@@ -186,10 +184,8 @@ class PanthorOTImportFbx(Operator):
 
             name_lower = obj.name.lower()
             is_lod = (
-                name_lower.startswith("lod")
-                and len(name_lower) > 3
-                and name_lower[3].isdigit()
-                and "_" in name_lower[3:]
+                "_lod" in name_lower
+                and name_lower.rpartition("_lod")[2].isdigit()
             )
             is_collider = any(obj.name.startswith(p) for p in collider_prefixes)
             if not is_lod and not is_collider:

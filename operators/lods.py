@@ -6,18 +6,16 @@ import bpy
 from bpy.props import CollectionProperty, FloatProperty, PointerProperty
 from bpy.types import Object, Operator, PropertyGroup
 
-# LOD prefix format: "LOD{n}_"
-_LOD_PREFIX = "LOD"
+# LOD suffix format: "_{base_name}_LOD{n}"
+_LOD_SUFFIX = "_LOD"
 
 
 def get_base_name(obj: Object) -> str:
-    """Get the base name without LOD prefix (e.g. 'LOD0_MyMesh' → 'MyMesh')."""
+    """Get the base name without LOD suffix (e.g. 'MyMesh_LOD0' → 'MyMesh')."""
     name = obj.name
-    if name.startswith(_LOD_PREFIX) and "_" in name[len(_LOD_PREFIX) :]:
-        # Strip leading digits after "LOD" and the underscore separator
-        rest = name[len(_LOD_PREFIX) :]  # e.g. "0_MyMesh"
-        num_str, _, base = rest.partition("_")
-        if num_str.isdigit():
+    if _LOD_SUFFIX in name:
+        base, _, suffix = name.rpartition(_LOD_SUFFIX)
+        if suffix.isdigit():
             return base
     return name
 
@@ -26,17 +24,16 @@ def get_lod_objects(base_name):
     """
     Return all LOD objects for a base name, sorted by LOD number.
 
-    Naming convention: ``LOD{n}_{base_name}``
+    Naming convention: ``{base_name}_LOD{n}``
     """
     lods = []
     for obj in bpy.context.scene.objects:
         name = obj.name
-        if not name.startswith(_LOD_PREFIX):
+        if not name.startswith(base_name + _LOD_SUFFIX):
             continue
-        rest = name[len(_LOD_PREFIX) :]  # e.g. "0_MyMesh"
-        num_str, _, obj_base = rest.partition("_")
-        if num_str.isdigit() and obj_base == base_name:
-            lods.append((int(num_str), obj))
+        suffix = name[len(base_name) + len(_LOD_SUFFIX):]  # e.g. "0"
+        if suffix.isdigit():
+            lods.append((int(suffix), obj))
     lods.sort(key=lambda x: x[0])
     return lods
 
@@ -51,7 +48,7 @@ def _refresh_lod_list(context):
     base_name = get_base_name(active)
 
     # LOD0 is the base / highest-quality mesh
-    lod0_obj = bpy.data.objects.get(f"LOD0_{base_name}")
+    lod0_obj = bpy.data.objects.get(f"{base_name}_LOD0")
     base_obj = lod0_obj or bpy.data.objects.get(base_name) or active
     base_verts = len(base_obj.data.vertices)
 
@@ -60,7 +57,7 @@ def _refresh_lod_list(context):
     # Collect all LODs in numeric order
     ordered_lods = get_lod_objects(base_name)
 
-    # If the plain-named base exists and has no LOD0 counterpart, show it first
+    # If the plain-named base exists and has no _LOD0 counterpart, show it first
     if not lod0_obj and bpy.data.objects.get(base_name):
         plain_obj = bpy.data.objects[base_name]
         item = context.scene.panthor_lods.add()
@@ -109,9 +106,9 @@ class PanthorOTAddLOD(Operator):
 
         base_name = get_base_name(lod0_obj)
 
-        # Ensure the base object is named as LOD0_{base_name}
-        if not lod0_obj.name.startswith("LOD0_"):
-            lod0_obj.name = f"LOD0_{base_name}"
+        # Ensure the base object is named as {base_name}_LOD0
+        if not lod0_obj.name.endswith("_LOD0"):
+            lod0_obj.name = f"{base_name}_LOD0"
 
         # Find highest existing LOD number
         existing_lods = get_lod_objects(base_name)
@@ -124,7 +121,7 @@ class PanthorOTAddLOD(Operator):
 
         bpy.ops.object.duplicate(linked=False)
         new_obj = context.active_object
-        new_obj.name = f"LOD{next_lod_num}_{base_name}"
+        new_obj.name = f"{base_name}_LOD{next_lod_num}"
 
         # Add decimate modifier with progressive reduction
         mod = new_obj.modifiers.new(name="Decimate", type="DECIMATE")
@@ -254,14 +251,13 @@ def _update_hide_lods(self, _context):
         if not obj:
             continue
         # Never hide LOD0 / base mesh
-        if obj.name.startswith("LOD0_"):
+        if obj.name.endswith("_LOD0"):
             continue
-        # Hide any object that carries a LOD prefix
+        # Hide any object that carries a LOD suffix
         name = obj.name
-        if name.startswith(_LOD_PREFIX):
-            rest = name[len(_LOD_PREFIX) :]
-            num_str = rest.partition("_")[0]
-            if num_str.isdigit():
+        if _LOD_SUFFIX in name:
+            _, _, suffix = name.rpartition(_LOD_SUFFIX)
+            if suffix.isdigit():
                 obj.hide_viewport = hide
                 obj.hide_render = hide
 

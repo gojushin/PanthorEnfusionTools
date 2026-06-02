@@ -67,14 +67,21 @@ class PanthorOTExportFbx(Operator):
                     for mod in obj.modifiers:
                         bpy.ops.object.modifier_apply(modifier=mod.name)
 
-        # Export FBX — derive base name by stripping any LODx_ prefix
+        # Export FBX — derive base name from collection or active object
         base_name = "ExportedModel"
-        if context.active_object:
+
+        # 1. Try collection name first
+        col_name = context.scene.get("panthor_import_col_real", "")
+        if col_name:
+            base_name = col_name
+        elif context.scene.panthor_import_collection_name:
+            base_name = context.scene.panthor_import_collection_name
+        elif context.active_object:
             raw = context.active_object.name
-            # New convention: LODx_BaseName
-            if raw.startswith("LOD") and "_" in raw[3:]:
-                num_str, _, rest = raw[3:].partition("_")
-                base_name = rest if num_str.isdigit() else raw
+            # New convention: BaseName_LODx
+            if "_LOD" in raw:
+                rest, _, lod_suffix = raw.rpartition("_LOD")
+                base_name = rest if lod_suffix.isdigit() else raw
             else:
                 base_name = raw
 
