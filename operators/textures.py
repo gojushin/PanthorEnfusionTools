@@ -181,7 +181,7 @@ def process_material_textures_explicit(material: Material, mapping_items: list[P
             mix.location = (-200, 200)
 
             links.new(tex_bcr.outputs[0], mix.inputs["A"])
-            links.new(sep.outputs["Alpha"], mix.inputs["B"])
+            links.new(tex_nmo.outputs["Alpha"], mix.inputs["B"])
             links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
 
     if "A" in generated_textures:
