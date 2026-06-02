@@ -16,7 +16,7 @@ from ..utils.constants import (
 )
 
 
-def _rebuild_collider_geometry(obj: Object):
+def _rebuild_collider_geometry(obj: Object, skip_box_conversion: bool = False):
     """Rebuild collider geometry based on its prefix and vertex positions."""
     if obj.type != "MESH":
         return
@@ -52,9 +52,11 @@ def _rebuild_collider_geometry(obj: Object):
     if not prefix:
         return
 
-    # UCX to UBX conversion check
-    if prefix == COLLIDER_PREFIX_CONVEX and len(obj.data.vertices) == 8:
-        # Simple heuristic: if it has 8 verts, assume it's a box
+    # UCX to UBX conversion: if a convex collider has exactly 8 vertices it is
+    # indistinguishable from a box, so promote it.  This is intentionally
+    # skipped when the collider was just created by the user (the seed geometry
+    # is always 8 bounding-box corners before the hull is built).
+    if not skip_box_conversion and prefix == COLLIDER_PREFIX_CONVEX and len(obj.data.vertices) == 8:
         prefix = COLLIDER_PREFIX_BOX
         obj.name = name.replace(COLLIDER_PREFIX_CONVEX, COLLIDER_PREFIX_BOX, 1)
 
@@ -299,7 +301,7 @@ class PanthorOTAddCollider(Operator):
         new_obj["panthor_basename"] = base_name
 
         new_obj.name = f"{prefix}{base_name}"
-        _rebuild_collider_geometry(new_obj)
+        _rebuild_collider_geometry(new_obj, skip_box_conversion=True)
 
         # Link to the active object's collection
         active_cols = active.users_collection
