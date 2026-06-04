@@ -737,10 +737,14 @@ def _bake_and_remap_material(
                 bpy.data.images.remove(existing)
             return bpy.data.images.new(iname, width=res, height=res, alpha=True)
 
-        # Base Colour
+        # Base Colour – use the Emission trick so bump/normal nodes cannot
+        # influence the bake (DIFFUSE/COLOR is evaluated with surface normals
+        # in context, which causes bump-perturbed normal XY data to bleed into
+        # the BCR RGB channels).
         if bc_linked:
             baked_bc = _new_bake_img("BakeBC")
-            if _bake_channel(mat, baked_bc, "DIFFUSE", pass_filter={"COLOR"}):
+            if _bake_channel(mat, baked_bc, "EMIT",
+                             emit_source_socket=bc_socket.links[0].from_socket):
                 baked_bc.pack()
             else:
                 bpy.data.images.remove(baked_bc)
