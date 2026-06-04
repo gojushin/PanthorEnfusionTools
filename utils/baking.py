@@ -531,8 +531,22 @@ def bake_and_remap_material(
     bc_linked = bc_socket.is_linked
     r_linked  = r_socket.is_linked
     m_linked  = m_socket.is_linked
-    n_linked  = n_socket.is_linked
     a_linked  = a_socket.is_linked
+
+    # n_linked is True only when the Normal socket is linked AND the upstream
+    # node is not an "empty" ShaderNodeNormalMap (i.e. one whose own Color
+    # input is unlinked).  FBX imports often wire in a NormalMap node with no
+    # texture connected; treating that as linked would trigger an unnecessary
+    # normal bake and produce a flat/incorrect result.
+    if n_socket.is_linked:
+        _n_from_node = n_socket.links[0].from_node
+        _is_empty_normal_map = (
+            _n_from_node.type == "NORMAL_MAP"
+            and not _n_from_node.inputs["Color"].is_linked
+        )
+        n_linked = not _is_empty_normal_map
+    else:
+        n_linked = False
 
     flat_bc = list(bc_socket.default_value)
     flat_r  = float(r_socket.default_value)
