@@ -25,6 +25,25 @@ from bpy.types import Material
 from .constants import SOLID_IMAGE_SIZE
 
 
+# ── Color-space helpers ───────────────────────────────────────────────────────
+
+
+def linear_to_srgb(arr: np.ndarray) -> np.ndarray:
+    """
+    Convert scene-linear radiance values to sRGB-encoded values.
+
+    Principled BSDF Base Color sockets store scene-linear colour data and
+    CYCLES' DIFFUSE bake also outputs linear radiance.  PBR BaseColor
+    textures must be stored as sRGB-encoded so that the numeric pixel
+    values match what users see in Blender's colour picker.
+    """
+    small = arr <= 0.0031308
+    result = np.empty_like(arr, dtype=np.float32)
+    result[small] = arr[small] * 12.92
+    result[~small] = 1.055 * np.power(arr[~small], 1.0 / 2.4) - 0.055
+    return result
+
+
 # ── UV helpers ────────────────────────────────────────────────────────────────
 
 
@@ -108,13 +127,9 @@ def _pack_bcr_from_parts(
 
     if base_color_img is not None:
         src = _read_resized(base_color_img, target, target)
-        pix[:, :, 0] = src[:, :, 0]
-        pix[:, :, 1] = src[:, :, 1]
-        pix[:, :, 2] = src[:, :, 2]
+        pix[:, :, :3] = linear_to_srgb(src[:, :, :3])
     else:
-        pix[:, :, 0] = flat_base_color[0]
-        pix[:, :, 1] = flat_base_color[1]
-        pix[:, :, 2] = flat_base_color[2]
+        pix[:, :, :3] = linear_to_srgb(np.array(flat_base_color[:3]))
 
     if roughness_img is not None:
         src_r = _read_resized(roughness_img, target, target)
