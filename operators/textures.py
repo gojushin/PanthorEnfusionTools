@@ -8,7 +8,7 @@ import numpy as np
 from bpy.props import BoolProperty, CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Material, Operator, PropertyGroup
 
-from ..utils.constants import TEXTURE_SUFFIXES
+from ..utils.constants import TEXTURE_SUFFIXES, SOLID_IMAGE_SIZE
 from ..utils.texture_presets import TEXTURE_PRESETS
 from ..utils.texture_processing import generate_texture
 
@@ -437,13 +437,13 @@ def _set_enf_base_color(material: Material, color_rgba: tuple) -> None:
         print(f"[PanthorTools] Could not set ENF base color for '{material.name}': {exc}")
 
 
-def _create_solid_image(name: str, width: int, height: int, color_rgba: tuple) -> bpy.types.Image:
+def _create_solid_image(name: str, color_rgba: tuple) -> bpy.types.Image:
     """Create a flat single-colour packed Image without baking."""
     existing = bpy.data.images.get(name)
     if existing:
         bpy.data.images.remove(existing)
-    img = bpy.data.images.new(name, width=width, height=height, alpha=True)
-    pix = np.tile(np.array(color_rgba, dtype=np.float32), width * height)
+    img = bpy.data.images.new(name, width=SOLID_IMAGE_SIZE, height=SOLID_IMAGE_SIZE, alpha=True)
+    pix = np.tile(np.array(color_rgba, dtype=np.float32), SOLID_IMAGE_SIZE * SOLID_IMAGE_SIZE)
     img.pixels.foreach_set(pix)
     img.update()
     img.pack()
@@ -534,6 +534,25 @@ def _bake_channel(
     return ok
 
 
+def _read_resized(src: bpy.types.Image, target_h: int, target_w: int) -> np.ndarray:
+    """
+    Read *src* pixels into a numpy array and resize to *(target_h, target_w)* via
+    nearest-neighbour sampling when the source dimensions differ from the target.
+
+    This guarantees that solid images created by ``_create_solid_image`` (which may
+    have been generated at a smaller resolution) are always upscaled to match the
+    packed map size before channels are extracted.
+    """
+    arr = np.empty(src.size[0] * src.size[1] * src.channels, dtype=np.float32)
+    src.pixels.foreach_get(arr)
+    arr = arr.reshape((src.size[1], src.size[0], src.channels))
+    if arr.shape[0] != target_h or arr.shape[1] != target_w:
+        ri = np.linspace(0, arr.shape[0] - 1, target_h).astype(int)
+        ci = np.linspace(0, arr.shape[1] - 1, target_w).astype(int)
+        arr = arr[ri[:, None], ci]
+    return arr
+
+
 def _pack_bcr_from_parts(
     name: str,
     res: int,
@@ -546,26 +565,31 @@ def _pack_bcr_from_parts(
     Channel-pack a BCR image:
       - RGB = base colour (baked or flat *flat_base_color*)
       - A   = roughness   (baked or constant *flat_roughness*)
+
+    The output resolution is determined by the **largest** input image.  This
+    means:
+    - If at least one source is a full-resolution baked image, the output is
+      packed at that resolution and any smaller images (e.g. solid images from
+      ``_create_solid_image``) are upscaled to match.
+    - If every source is a solid image (``SOLID_IMAGE_SIZE × SOLID_IMAGE_SIZE``),
+      the packed output is also ``SOLID_IMAGE_SIZE × SOLID_IMAGE_SIZE`` — no
+      needless upscaling.
+    - *res* is used as a fallback only when no source images are provided at all.
     """
-
-    def _read_resized(src: bpy.types.Image, r: int) -> np.ndarray:
-        arr = np.empty(src.size[0] * src.size[1] * src.channels, dtype=np.float32)
-        src.pixels.foreach_get(arr)
-        arr = arr.reshape((src.size[1], src.size[0], src.channels))
-        if arr.shape[0] != r or arr.shape[1] != r:
-            ri = np.linspace(0, arr.shape[0] - 1, r).astype(int)
-            ci = np.linspace(0, arr.shape[1] - 1, r).astype(int)
-            arr = arr[ri[:, None], ci]
-        return arr
-
     existing = bpy.data.images.get(name)
     if existing:
         bpy.data.images.remove(existing)
 
-    pix = np.empty((res, res, 4), dtype=np.float32)
+    # Derive target resolution from the largest supplied image; fall back to res.
+    target = max(
+        (img.size[0] for img in (base_color_img, roughness_img) if img is not None),
+        default=res,
+    )
+
+    pix = np.empty((target, target, 4), dtype=np.float32)
 
     if base_color_img is not None:
-        src = _read_resized(base_color_img, res)
+        src = _read_resized(base_color_img, target, target)
         pix[:, :, 0] = src[:, :, 0]
         pix[:, :, 1] = src[:, :, 1]
         pix[:, :, 2] = src[:, :, 2]
@@ -575,12 +599,12 @@ def _pack_bcr_from_parts(
         pix[:, :, 2] = flat_base_color[2]
 
     if roughness_img is not None:
-        src_r = _read_resized(roughness_img, res)
+        src_r = _read_resized(roughness_img, target, target)
         pix[:, :, 3] = src_r[:, :, 0]
     else:
         pix[:, :, 3] = flat_roughness
 
-    img = bpy.data.images.new(name, width=res, height=res, alpha=True)
+    img = bpy.data.images.new(name, width=target, height=target, alpha=True)
     img.pixels.foreach_set(pix.ravel())
     img.update()
     img.pack()
@@ -599,27 +623,32 @@ def _pack_nmo_from_parts(
       - RG  = normal map XY (baked or flat 0.5, 0.5)
       - B   = metallic      (baked or constant *flat_metallic*)
       - A   = 1.0           (AO default – not baked in this pass)
+
+    The output resolution is determined by the **largest** input image.  This
+    means:
+    - If at least one source is a full-resolution baked image, the output is
+      packed at that resolution and any smaller images (e.g. solid images from
+      ``_create_solid_image``) are upscaled to match.
+    - If every source is a solid image (``SOLID_IMAGE_SIZE × SOLID_IMAGE_SIZE``),
+      the packed output is also ``SOLID_IMAGE_SIZE × SOLID_IMAGE_SIZE`` — no
+      needless upscaling.
+    - *res* is used as a fallback only when no source images are provided at all.
     """
-
-    def _read_resized(src: bpy.types.Image, r: int) -> np.ndarray:
-        arr = np.empty(src.size[0] * src.size[1] * src.channels, dtype=np.float32)
-        src.pixels.foreach_get(arr)
-        arr = arr.reshape((src.size[1], src.size[0], src.channels))
-        if arr.shape[0] != r or arr.shape[1] != r:
-            ri = np.linspace(0, arr.shape[0] - 1, r).astype(int)
-            ci = np.linspace(0, arr.shape[1] - 1, r).astype(int)
-            arr = arr[ri[:, None], ci]
-        return arr
-
     existing = bpy.data.images.get(name)
     if existing:
         bpy.data.images.remove(existing)
 
-    pix = np.empty((res, res, 4), dtype=np.float32)
+    # Derive target resolution from the largest supplied image; fall back to res.
+    target = max(
+        (img.size[0] for img in (normal_img, metallic_img) if img is not None),
+        default=res,
+    )
+
+    pix = np.empty((target, target, 4), dtype=np.float32)
     pix[:, :, 3] = 1.0  # AO channel – default full white
 
     if normal_img is not None:
-        src = _read_resized(normal_img, res)
+        src = _read_resized(normal_img, target, target)
         pix[:, :, 0] = src[:, :, 0]
         pix[:, :, 1] = src[:, :, 1]
     else:
@@ -627,12 +656,12 @@ def _pack_nmo_from_parts(
         pix[:, :, 1] = 0.5
 
     if metallic_img is not None:
-        src_m = _read_resized(metallic_img, res)
+        src_m = _read_resized(metallic_img, target, target)
         pix[:, :, 2] = src_m[:, :, 0]  # R channel holds the baked scalar
     else:
         pix[:, :, 2] = flat_metallic
 
-    img = bpy.data.images.new(name, width=res, height=res, alpha=True)
+    img = bpy.data.images.new(name, width=target, height=target, alpha=True)
     img.pixels.foreach_set(pix.ravel())
     img.update()
     img.pack()
@@ -759,17 +788,17 @@ def _bake_and_remap_material(
     # encoded into the packed BCR/NMO output correctly
     if (not r_linked) and (not r_is_default) and (baked_r is None):
         baked_r = _create_solid_image(
-            f"PTR_{mat.name}_BakeR", res, res, (flat_r, flat_r, flat_r, 1.0)
+            f"PTR_{mat.name}_BakeR", (flat_r, flat_r, flat_r, 1.0)
         )
 
     if (not m_linked) and (not m_is_default) and (baked_m is None):
         baked_m = _create_solid_image(
-            f"PTR_{mat.name}_BakeM", res, res, (flat_m, flat_m, flat_m, 1.0)
+            f"PTR_{mat.name}_BakeM", (flat_m, flat_m, flat_m, 1.0)
         )
 
     if (not a_linked) and (not a_is_default) and (baked_a is None):
         baked_a = _create_solid_image(
-            f"PTR_{mat.name}_BakeA", res, res, (flat_a, flat_a, flat_a, 1.0)
+            f"PTR_{mat.name}_BakeA", (flat_a, flat_a, flat_a, 1.0)
         )
 
     # ── 3. Channel-pack into BCR / NMO ───────────────────────────────────────

@@ -26,3 +26,8 @@ TEXTURE_SUFFIX_ENFUSION_A = "_A"
 
 # Other Constants
 MAX_VERTS_COLLIDER = 65535
+
+# Size used for solid (single-colour) placeholder images.  These are tiny because
+# they contain no detail; _read_resized() will upscale them to match the packed
+# map resolution at channel-packing time.
+SOLID_IMAGE_SIZE = 4
