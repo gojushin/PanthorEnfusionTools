@@ -466,12 +466,34 @@ def _ensure_uv_map(obj: bpy.types.Object) -> bool:
     return True
 
 
+def _deactivate_other_material_nodes(obj: bpy.types.Object, skip_mat: Material) -> None:
+    """
+    Set ``nodes.active = None`` on every material slot of *obj* except *skip_mat*.
+
+    When a multi-material (joined) mesh is the bake target, Blender writes bake
+    data into whatever ``ShaderNodeTexImage`` node is *active* in **each**
+    material's tree — not just the one being baked.  If a previous baking
+    iteration left an image-texture node active in another material (e.g. the
+    freshly rebuilt BCR preview node), that material's polygons will also
+    receive the current bake pass, corrupting the wrong image.
+
+    Clearing the active node on all non-target materials before every bake call
+    ensures Blender has no stray destination to write into.
+    """
+    for slot in obj.material_slots:
+        mat = slot.material
+        if mat is None or mat is skip_mat or not mat.use_nodes:
+            continue
+        mat.node_tree.nodes.active = None
+
+
 def _bake_channel(
     mat: Material,
     img: bpy.types.Image,
     bake_type: str,
     pass_filter: set | None = None,
     emit_source_socket=None,
+    obj: bpy.types.Object | None = None,
 ) -> bool:
     """
     Bake *bake_type* from the currently active object's *mat* into *img*.
@@ -482,6 +504,11 @@ def _bake_channel(
     When *emit_source_socket* is provided its upstream value is temporarily
     wired through an Emission shader so arbitrary sockets (e.g. Metallic,
     Alpha) can be captured via ``type='EMIT'``.
+
+    When *obj* is provided, ``_deactivate_other_material_nodes`` is called
+    before the bake to prevent stray active image-texture nodes in other
+    material slots from being written into during the bake pass.  This is
+    critical for joined (multi-material) meshes.
     """
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
@@ -493,6 +520,10 @@ def _bake_channel(
         n.select = False
     bake_node.select = True
     nodes.active = bake_node
+
+    # ── Guard: clear active nodes on all other materials of the same object ──
+    if obj is not None:
+        _deactivate_other_material_nodes(obj, mat)
 
     # ── Optional emit-trick setup ─────────────────────────────────────────────
     emit_node = None
@@ -740,7 +771,7 @@ def _bake_and_remap_material(
         # Base Colour
         if bc_linked:
             baked_bc = _new_bake_img("BakeBC")
-            if _bake_channel(mat, baked_bc, "DIFFUSE", pass_filter={"COLOR"}):
+            if _bake_channel(mat, baked_bc, "DIFFUSE", pass_filter={"COLOR"}, obj=obj):
                 baked_bc.pack()
             else:
                 bpy.data.images.remove(baked_bc)
@@ -749,7 +780,7 @@ def _bake_and_remap_material(
         # Roughness
         if r_linked:
             baked_r = _new_bake_img("BakeR")
-            if _bake_channel(mat, baked_r, "ROUGHNESS"):
+            if _bake_channel(mat, baked_r, "ROUGHNESS", obj=obj):
                 baked_r.pack()
             else:
                 bpy.data.images.remove(baked_r)
@@ -759,7 +790,8 @@ def _bake_and_remap_material(
         if m_linked:
             baked_m = _new_bake_img("BakeM")
             if _bake_channel(mat, baked_m, "EMIT",
-                             emit_source_socket=m_socket.links[0].from_socket):
+                             emit_source_socket=m_socket.links[0].from_socket,
+                             obj=obj):
                 baked_m.pack()
             else:
                 bpy.data.images.remove(baked_m)
@@ -768,7 +800,7 @@ def _bake_and_remap_material(
         # Normal Map
         if n_linked:
             baked_n = _new_bake_img("BakeN")
-            if _bake_channel(mat, baked_n, "NORMAL"):
+            if _bake_channel(mat, baked_n, "NORMAL", obj=obj):
                 baked_n.pack()
             else:
                 bpy.data.images.remove(baked_n)
@@ -778,7 +810,8 @@ def _bake_and_remap_material(
         if a_linked:
             baked_a = _new_bake_img("BakeA")
             if _bake_channel(mat, baked_a, "EMIT",
-                             emit_source_socket=a_socket.links[0].from_socket):
+                             emit_source_socket=a_socket.links[0].from_socket,
+                             obj=obj):
                 baked_a.pack()
             else:
                 bpy.data.images.remove(baked_a)
