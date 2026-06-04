@@ -123,6 +123,10 @@ class PanthorPTMainPanel(Panel):
         row = box.row(align=True)
         row.operator("panthor.import_textures", text="Import & Remap Textures")
 
+        row = box.row(align=True)
+        row.operator("panthor.bake_remap_materials", text="Bake & Remap Materials")
+        row.prop(context.scene, "panthor_bake_resolution", text="")
+
         row = box.row()
         row.template_list(
             "PanthorULTextureList",
