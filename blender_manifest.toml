@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "panthor_enfusion_tools"
-version = "0.1.1"
+version = "0.1.2"
 name = "Panthor Enfusion Tools"
 tagline = "Toolbox for modifying FBX files to Enfusion engine standards"
 maintainer = "gojushin"
