@@ -1,3 +1,5 @@
+[![Build Plugins](https://github.com/gojushin/PanthorEnfusionTools/actions/workflows/build.yml/badge.svg)](https://github.com/gojushin/PanthorEnfusionTools/actions/workflows/build.yml)
+
 # Panthor Enfusion Tools
 
 A Blender 4.2+ extension designed to streamline the conversion and editing of `.fbx` assets for the Enfusion engine. It supports assets from common workflows such as Unreal Engine, Unity, and standard PBR Metal/Rough pipelines.
