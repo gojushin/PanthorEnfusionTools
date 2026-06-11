@@ -58,6 +58,11 @@ class PanthorOTImportFbx(Operator):
     keep_collisions: BoolProperty(
         name="Keep Collisions", description="Keep Collision objects during import", default=True
     )
+    clear_color_attributes: BoolProperty(
+        name="Clear Color Attributes",
+        description="Remove all vertex and face color attributes from imported meshes",
+        default=True,
+    )
 
     def invoke(self, context, event):
         """Invoke file selector."""
@@ -70,6 +75,10 @@ class PanthorOTImportFbx(Operator):
         bpy.ops.import_scene.fbx(filepath=self.filepath)
 
         imported_objects = self._process_imported_objects(context)
+
+        if self.clear_color_attributes:
+            self._clear_color_attributes(imported_objects)
+
         base_name = self._determine_base_name(imported_objects)
 
         col = bpy.data.collections.new(base_name)
@@ -149,6 +158,13 @@ class PanthorOTImportFbx(Operator):
             imported_objects = [o for o in imported_objects if o not in objects_to_delete]
 
         return imported_objects
+
+    def _clear_color_attributes(self, imported_objects: list[bpy.types.Object]):
+        """Remove all vertex and face color attributes from imported mesh objects."""
+        for obj in imported_objects:
+            if obj.type == "MESH" and obj.data:
+                for attr in list(obj.data.color_attributes):
+                    obj.data.color_attributes.remove(attr)
 
     def _determine_base_name(self, imported_objects: list[bpy.types.Object]) -> str:
         """Determine the base name for the collection/objects."""
