@@ -127,9 +127,9 @@ def _pack_bcr_from_parts(
 
     if base_color_img is not None:
         src = _read_resized(base_color_img, target, target)
-        pix[:, :, :3] = linear_to_srgb(src[:, :, :3])
+        pix[:, :, :3] = src[:, :, :3]
     else:
-        pix[:, :, :3] = linear_to_srgb(np.array(flat_base_color[:3]))
+        pix[:, :, :3] = np.array(flat_base_color[:3])
 
     if roughness_img is not None:
         src_r = _read_resized(roughness_img, target, target)
