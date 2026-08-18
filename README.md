@@ -1,6 +1,6 @@
 [![Build Plugins](https://github.com/gojushin/PanthorEnfusionTools/actions/workflows/build.yml/badge.svg)](https://github.com/gojushin/PanthorEnfusionTools/actions/workflows/build.yml)
 
-[!WARNING]
+> [!WARNING]
 > This plugin is designed to support our production workflow at [Panthor Life](https://panthor.de/). As a result, certain aspects, such as texture naming conventions, are specifically hardcoded to fit our workflow.
 > Furthermore, some features are still under development and may not work as expected. There are also a few workflow-specific pitfalls that need to be taken into consideration.
 > If you encounter any bugs, unexpected behaviour, or other oddities, please don't hesitate to open an issue. I will look into it and address the problem, or answer questions as soon as possible.
